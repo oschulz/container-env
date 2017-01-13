@@ -1,0 +1,63 @@
+#!/bin/bash -e
+
+VENV_BASE_DIR="${VENV_BASE_DIR:-${HOME}/.venv}"
+
+PROG="$0"
+VENV_NAME="$1"
+
+# echo "VENV_BASE_DIR=\"${VENV_BASE_DIR}\"" >&2
+# echo "VENV_NAME=\"${VENV_NAME}\"" >&2
+
+if [ -z "${VENV_NAME}" ]; then
+    echo "ERROR: Syntax: ${PROG} shell|program [...]" >&2
+    exit 1
+fi
+
+shift 1
+CMD="$1"
+
+VENV_DIR="${VENV_BASE_DIR}/${VENV_NAME}"
+
+if [ ! -d "${VENV_DIR}" ]; then
+    echo "ERROR: venv directory \"${VENV_DIR}\" doesn't exist." >&2
+    exit 1
+fi
+
+if [ -d "${VENV_DIR}/rootfs" ]; then
+    FS_IMG="${VENV_DIR}/rootfs/"
+elif [ -f "${VENV_DIR}/rootfs.sqsh" ]; then
+    FS_IMG="${VENV_DIR}/rootfs.sqsh"
+else
+    echo "ERROR: No rootfs found in \"${VENV_DIR}\"." >&2
+    exit 1
+fi
+
+VENV_USER_DIR="${VENV_DIR}/user"
+
+if [ "${CMD}" = "shell" ]; then
+    shift 1
+elif [ -z "${CMD}" ]; then
+    CMD="shell"
+else
+    CMD="exec"
+fi
+
+# echo "VENV_DIR=\"${VENV_DIR}\"" >&2
+# echo "VENV_USER_DIR=\"${VENV_USER_DIR}\"" >&2
+# echo "FS_IMG=\"${FS_IMG}\"" >&2
+# echo "CMD=\"${CMD} $@" >&2
+
+
+export JUPYTER_CONFIG_DIR="/user/.jupyter"
+export JUPYTER_DATA_DIR="/user/.local/share/jupyter"
+export JULIA_PKGDIR="/user/.julia"
+export ATOM_HOME="/user/.atom"
+
+export VENV_NAME
+export debian_chroot="${VENV_NAME}"
+
+mkdir -p "${VENV_USER_DIR}"
+
+singularity "${CMD}" \
+    -B "${VENV_USER_DIR}:/user" \
+    "${FS_IMG}" "$@"
