@@ -48,6 +48,9 @@ fi
 # echo "CMD=\"${CMD} $@" >&2
 
 
+export SWMOD_HOSTSPEC=""
+export SWMOD_INST_BASE="/user/.local/sw"
+export SWMOD_MODPATH="/user/.local/sw"
 export JUPYTER_CONFIG_DIR="/user/.jupyter"
 export JUPYTER_DATA_DIR="/user/.local/share/jupyter"
 export JULIA_PKGDIR="/user/.julia"
