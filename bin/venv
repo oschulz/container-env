@@ -1,9 +1,10 @@
 #!/bin/bash -e
 
-VENV_BASE_DIR="${VENV_BASE_DIR:-${HOME}/.venv}"
+export VENV_BASE_DIR="${VENV_BASE_DIR:-${HOME}/.venv}"
+export VENV_USER_MNT="${VENV_USER_MNT:-/user}"
 
 PROG="$0"
-VENV_NAME="$1"
+export VENV_NAME="$1"
 
 # echo "VENV_BASE_DIR=\"${VENV_BASE_DIR}\"" >&2
 # echo "VENV_NAME=\"${VENV_NAME}\"" >&2
@@ -32,8 +33,6 @@ else
     exit 1
 fi
 
-VENV_USER_DIR="${VENV_DIR}/user"
-
 if [ "${CMD}" = "shell" ]; then
     shift 1
 elif [ -z "${CMD}" ]; then
@@ -42,25 +41,38 @@ else
     CMD="exec"
 fi
 
-# echo "VENV_DIR=\"${VENV_DIR}\"" >&2
-# echo "VENV_USER_DIR=\"${VENV_USER_DIR}\"" >&2
-# echo "FS_IMG=\"${FS_IMG}\"" >&2
-# echo "CMD=\"${CMD} $@" >&2
 
+VENV_USER_DIR="${VENV_DIR}/user"
+mkdir -p "${VENV_USER_DIR}"
 
-export SWMOD_HOSTSPEC=""
-export SWMOD_INST_BASE="/user/.local/sw"
-export SWMOD_MODPATH="/user/.local/sw"
-export JUPYTER_CONFIG_DIR="/user/.jupyter"
-export JUPYTER_DATA_DIR="/user/.local/share/jupyter"
-export JULIA_PKGDIR="/user/.julia"
-export ATOM_HOME="/user/.atom"
+if [ "${VENV_USER_MNT}" == "none" ] ; then
+    VENV_USER_MNT="${VENV_USER_DIR}"
+fi
+
+# echo "DEBUG: VENV_DIR=\"${VENV_DIR}\"" >&2
+# echo "DEBUG: VENV_USER_DIR=\"${VENV_USER_DIR}\"" >&2
+# echo "DEBUG: VENV_USER_MNT=\"${VENV_USER_MNT}\"" >&2
+# echo "DEBUG: FS_IMG=\"${FS_IMG}\"" >&2
+# echo "DEBUG: CMD=\"${CMD} $@" >&2
+
+export SWMOD_HOSTSPEC="linux-x86_64-${VENV_NAME}"
+export SWMOD_INST_BASE="${VENV_USER_MNT}/.local/sw"
+export SWMOD_MODPATH="${SWMOD_INST_BASE}"
+
+export JUPYTER_CONFIG_DIR="${VENV_USER_MNT}/.jupyter"
+export JUPYTER_DATA_DIR="${VENV_USER_MNT}/.local/share/jupyter"
+export JULIA_PKGDIR="${VENV_USER_MNT}/.julia"
+export ATOM_HOME="${VENV_USER_MNT}/.atom"
 
 export VENV_NAME
 export debian_chroot="${VENV_NAME}"
 
-mkdir -p "${VENV_USER_DIR}"
 
-singularity "${CMD}" \
-    -B "${VENV_USER_DIR}:/user" \
-    "${FS_IMG}" "$@"
+if [ "${VENV_USER_MNT}" != "${VENV_USER_DIR}" ] ; then
+    exec singularity "${CMD}" \
+        -B "${VENV_USER_DIR}:${VENV_USER_MNT}" \
+        "${FS_IMG}" "$@"
+else
+    exec singularity "${CMD}" \
+        "${FS_IMG}" "$@"
+fi
