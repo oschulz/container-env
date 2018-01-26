@@ -84,6 +84,7 @@ else
     export VENV_NAME="${VENV_NAME_ARG}"
     export debian_chroot="${VENV_NAME_ARG}"
 
+    export SINGULARITY_SHELL="${SINGULARITY_SHELL:-${SHELL}}"
 
     if [ "${VENV_USER_MNT}" != "${VENV_USER_DIR}" ] ; then
         exec singularity "${CMD}" ${EXTRA_OPTS} \
