@@ -65,6 +65,10 @@ else
         # echo "DEBUG: NVIDIA drivers available, adding singularity option \"--nv\"" >&2
         EXTRA_OPTS="${EXTRA_OPTS} --nv"
     fi
+    if [ -d "/etc/OpenCL/vendors" ]; then
+        # echo "DEBUG: OpenCL available, mounting vendors directory" >&2
+        EXTRA_OPTS="${EXTRA_OPTS} -B /etc/OpenCL/vendors"
+    fi
 
     # echo "DEBUG: VENV_DIR=\"${VENV_DIR}\"" >&2
     # echo "DEBUG: VENV_USER_DIR=\"${VENV_USER_DIR}\"" >&2
