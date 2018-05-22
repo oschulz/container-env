@@ -4,6 +4,166 @@ export VENV_BASE_DIR="${VENV_BASE_DIR:-${HOME}/.venv}"
 export VENV_USER_MNT="${VENV_USER_MNT:-/user}"
 export VENV_HOME_MNT="${VENV_HOME_MNT:-/homedir}"
 
+
+absname() {
+    local REL_PATH="$1"
+    local REL_DIRNAME="$(dirname "${REL_PATH}")"
+    local ABS_DIRNAME="$(cd "${REL_DIRNAME}" && pwd)"
+    if [ -z "$ABS_DIRNAME" ] ; then
+        echo "ERROR: Couldn't determine absolute path of \"${REL_DIRNAME}\"" >&2
+        return 1
+    fi
+    local BASENAME="$(basename "$1")"
+    if [ "${ABS_DIRNAME}" == "/" ] ; then
+        if [ "${BASENAME}" == "/" ] ; then
+            echo "/"
+        else
+            echo "/${BASENAME}"
+        fi
+    else
+        echo "${ABS_DIRNAME}/${BASENAME}"
+    fi
+}
+
+
+venv_help() {
+local PROG_NAME=`basename $0`
+cat <<EOF
+${PROG_NAME} - virtual enviroment management
+
+    ${PROG_NAME} [shell|program [...]]
+    ${PROG_NAME} --list
+    ${PROG_NAME} --create SINGULARITY_IMAGE.sqsh
+
+Use and manage virtual environments based on Singularity containers/images.
+
+USAGE
+-----
+
+    ${PROG_NAME} VENV_NAME
+    ${PROG_NAME} VENV_NAME shell
+    ${PROG_NAME} VENV_NAME PROGRAM [ARG...]
+
+Runs either the default action defined for the container image (often, a
+shell), otherwise a shell or a program with the given arguments.
+
+
+    ${PROG_NAME} --list [-v]
+
+List all defined virtual environments. With option `-v`, lists for the
+names and paths of the virtual environments. With `-r` option, i
+
+    ${PROG_NAME} --create VENV_NAME SINGULARITY_IMAGE[.sqsh]
+
+Create a virtual enviroment named `VENV_NAME` inside
+"\$VENV_BASE_DIR/VENV_NAME" and associate it with the Singularity container
+image "SINGULARITY_IMAGE[.sqsh]".
+
+
+ENVIRONMENT VARIABLES
+---------------------
+
+* VENV_BASE_DIR     Base path for virtual environment directories. Defaults
+                    to "\${HOME}/.venv".
+
+* VENV_USER_MNT     Site-independent mount point in container instance for
+                    "user"-directory (located inside virtual environment
+                    directory). Defaults to "/user".
+
+* VENV_USER_MNT     Site-independent mount point in container instance for
+                    "\${HOME}". Defaults to "/homedir". "${HOME}" itself will
+                    still (depeding on Singularity configuration) be available
+                    under it's original path as well.
+EOF
+} # swmod_list_usage()
+
+
+invalid_argument_error() {
+    if [ -n "${1}" ] ; then
+        echo "ERROR: Invalid arguments in \``basename $0` $@\`." >&2
+    else
+        echo "ERROR: First argument of \``basename $0`\` must not be empty." >&2
+    fi
+    echo "Run \``basename $0` --help\` for instructions." >&2
+    exit 1
+} # swmod_list_usage()
+
+
+venv_list() {
+    for dir in `echo /home/iwsatlas1/oschulz/.venv/*/rootfs2 /home/iwsatlas1/oschulz/.venv/*/rootfs.* | xargs dirname | grep -v '\*'`; do
+        if [ "$1" == "-v" ] ; then
+            echo "`basename ${dir}`: ${dir}"
+        else
+            echo "`basename ${dir}`"
+        fi
+    done
+}
+
+
+venv_create() {
+    local VENV_NAME="$1"
+    local VENV_IMG="$2"
+    if [ -z "${VENV_NAME}" -o -z "${VENV_IMG}" ] ; then
+        invalid_argument_error "$VENV_NAME_ARG" "$@"
+    fi
+
+    if (echo "${VENV_NAME}" | grep -q '\s') ; then
+        echo "ERROR: Name of virtual environment must not contain whitespace." >&2
+        exit 1
+    fi
+
+    local VENV_IMG_EXT=""
+    if [ -d "${VENV_IMG}" ]; then
+        if [ ! -e "${VENV_IMG}/bin/sh" ] ; then
+            echo "ERROR: Directory \"VENV_IMG\" doesn't seem to be a Singularit image (doesn't  contain \"bin/sh\")." >&2
+            exit 1
+        fi
+    elif [ -f "${VENV_IMG}" ]; then
+        local VENV_IMG_BASENAME=`basename "${VENV_IMG}"`
+        local VENV_IMG_EXT="${VENV_IMG_BASENAME##*.}"
+        case "${VENV_IMG_EXT}" in
+            "sqsh") ;;
+            "img") ;;
+            *)
+                echo "ERROR: Only singularity images of type directory, \"\*.sqsh\" and \"\*.img\" are supported." >&2
+                exit 1
+                ;;
+        esac
+    else
+        echo "ERROR: Singularity image \"${VENV_IMG}\" doesn't exist or is not a file or directory." >&2
+        exit 1
+    fi
+
+    VENV_IMG_ABS=`absname "${VENV_IMG}"`
+
+    local VENV_DIR="${VENV_BASE_DIR}/${VENV_NAME}"
+
+    if [ -e "${VENV_DIR}" ] ; then
+        echo "ERROR: Virtual enviromenment \"${VENV_NAME}\" (\"${VENV_DIR}\") already exists." >&2
+        exit 1
+    fi
+
+    if [ -z "${VENV_IMG_EXT}" ]; then
+        local IMG_LINK_NAME="rootfs"
+    else
+        local IMG_LINK_NAME="rootfs.${VENV_IMG_EXT}"
+    fi
+
+    local IMG_LINK_PATH="${VENV_DIR}/${IMG_LINK_NAME}"
+    echo "INFO: Creating virtual environment \"${VENV_NAME}\" in \"${VENV_DIR}\"" >&2
+    mkdir "${VENV_DIR}"
+    ln -s "${VENV_IMG_ABS}" "${IMG_LINK_PATH}"
+    if (command -v symlinks >/dev/null) ; then
+        echo "INFO: Command \"symlinks\" available, using relative symlink for \"${IMG_LINK_PATH}\"." >&2
+        command -v symlinks >/dev/null && symlinks -c -o "${VENV_DIR}" >/dev/null || true
+    else
+        echo "INFO: Command \"symlinks\" not available, using absolute symlink for \"${IMG_LINK_PATH}\"." >&2
+    fi
+    mkdir -p VENV_DIR="${VENV_DIR}/user"
+    echo "Created virtual environment \"${VENV_NAME}\", run \`venv ${VENV_NAME}\` to try it out." >&2
+}
+
+
 PROG="$0"
 VENV_NAME_ARG="$1"
 
@@ -11,8 +171,7 @@ VENV_NAME_ARG="$1"
 # echo "VENV_NAME_ARG=\"${VENV_NAME_ARG}\"" >&2
 
 if [ -z "${VENV_NAME_ARG}" ]; then
-    echo "ERROR: Syntax: ${PROG} shell|program [...]" >&2
-    exit 1
+    invalid_argument_error "${VENV_NAME_ARG}" "$@"
 fi
 
 shift 1
@@ -27,6 +186,12 @@ if [ "${VENV_NAME_ARG}" = "${VENV_NAME}" ] ; then
         echo "Note: Already in venv ${VENV_NAME}." >&2
         exec "$@"
     fi
+elif [ "${VENV_NAME_ARG}" = "--help" ] ; then
+    venv_help
+elif [ "${VENV_NAME_ARG}" = "--list" ] ; then
+    venv_list "$@"
+elif [ "${VENV_NAME_ARG}" = "--create" ] ; then
+    venv_create "$@"
 else
     if [ "${CMD}" = "shell" ]; then
         shift 1
@@ -47,6 +212,8 @@ else
         FS_IMG="${VENV_DIR}/rootfs/"
     elif [ -f "${VENV_DIR}/rootfs.sqsh" ]; then
         FS_IMG="${VENV_DIR}/rootfs.sqsh"
+    elif [ -f "${VENV_DIR}/rootfs.img" ]; then
+        FS_IMG="${VENV_DIR}/rootfs.img"
     else
         echo "ERROR: No rootfs found in \"${VENV_DIR}\"." >&2
         exit 1
