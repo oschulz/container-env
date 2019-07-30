@@ -33,7 +33,7 @@ ${PROG_NAME} - virtual enviroment management
 
     ${PROG_NAME} [shell|program [...]]
     ${PROG_NAME} --list
-    ${PROG_NAME} --create SINGULARITY_IMAGE.sqsh
+    ${PROG_NAME} --create VENV_NAME SINGULARITY_IMAGE.sqsh
 
 Use and manage virtual environments based on Singularity containers/images.
 
