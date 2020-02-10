@@ -253,6 +253,9 @@ else
     export SWMOD_MODPATH="${SWMOD_INST_BASE}"
 
 
+    # Special exports for Python:
+    export PYTHONUSERBASE="${VENV_USER_MNT}/.local"
+
     # Special exports for Jupyter:
     export JUPYTER_CONFIG_DIR="${VENV_USER_MNT}/.jupyter"
     export JUPYTER_DATA_DIR="${VENV_USER_MNT}/.local/share/jupyter"
