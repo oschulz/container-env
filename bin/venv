@@ -265,7 +265,7 @@ else
 
     # Special exports for Julia:
     export JULIA_PKGDIR="${VENV_USER_MNT}/.julia"
-    export JULIA_DEPOT_PATH="${VENV_USER_MNT}/.julia"
+    export JULIA_DEPOT_PATH="${VENV_USER_MNT}/.julia:"
     export JULIA_PKG_DEVDIR="${VENV_USER_MNT}/.julia/dev"
 
 
