@@ -33,7 +33,7 @@ ${PROG_NAME} - virtual enviroment management
 
     ${PROG_NAME} [shell|program [...]]
     ${PROG_NAME} --list
-    ${PROG_NAME} --create VENV_NAME SINGULARITY_IMAGE.sqsh
+    ${PROG_NAME} --create VENV_NAME SINGULARITY_IMAGE.sif
 
 Use and manage virtual environments based on Singularity containers/images.
 
@@ -53,11 +53,11 @@ shell), otherwise a shell or a program with the given arguments.
 List all defined virtual environments. With option `-v`, lists for the
 names and paths of the virtual environments. With `-r` option, i
 
-    ${PROG_NAME} --create VENV_NAME SINGULARITY_IMAGE[.sqsh]
+    ${PROG_NAME} --create VENV_NAME SINGULARITY_IMAGE[.sif]
 
 Create a virtual enviroment named `VENV_NAME` inside
 "\$VENV_BASE_DIR/VENV_NAME" and associate it with the Singularity container
-image "SINGULARITY_IMAGE[.sqsh]".
+image "SINGULARITY_IMAGE[.sif]".
 
 
 ENVIRONMENT VARIABLES
@@ -122,10 +122,11 @@ venv_create() {
         local VENV_IMG_BASENAME=`basename "${VENV_IMG}"`
         local VENV_IMG_EXT="${VENV_IMG_BASENAME##*.}"
         case "${VENV_IMG_EXT}" in
+            "sif") ;;
             "sqsh") ;;
             "img") ;;
             *)
-                echo "ERROR: Only singularity images of type directory, \"\*.sqsh\" and \"\*.img\" are supported." >&2
+                echo "ERROR: Only singularity images of type directory, \"\*.sif\", \"\*.sqsh\" and \"\*.img\" are supported." >&2
                 exit 1
                 ;;
         esac
@@ -210,6 +211,8 @@ else
 
     if [ -d "${VENV_DIR}/rootfs" ]; then
         FS_IMG="${VENV_DIR}/rootfs/"
+    elif [ -f "${VENV_DIR}/rootfs.sif" ]; then
+        FS_IMG="${VENV_DIR}/rootfs.sif"
     elif [ -f "${VENV_DIR}/rootfs.sqsh" ]; then
         FS_IMG="${VENV_DIR}/rootfs.sqsh"
     elif [ -f "${VENV_DIR}/rootfs.img" ]; then
