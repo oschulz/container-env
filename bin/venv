@@ -8,7 +8,7 @@ export VENV_HOME_MNT="${VENV_HOME_MNT:-/homedir}"
 absname() {
     local REL_PATH="$1"
     local REL_DIRNAME="$(dirname "${REL_PATH}")"
-    local ABS_DIRNAME="$(cd "${REL_DIRNAME}" && pwd)"
+    local ABS_DIRNAME="$(\cd "${REL_DIRNAME}" && pwd)"
     if [ -z "$ABS_DIRNAME" ] ; then
         echo "ERROR: Couldn't determine absolute path of \"${REL_DIRNAME}\"" >&2
         return 1
@@ -50,12 +50,12 @@ shell), otherwise a shell or a program with the given arguments.
 
     ${PROG_NAME} --list [-v]
 
-List all defined virtual environments. With option `-v`, lists for the
-names and paths of the virtual environments. With `-r` option, i
+List all defined virtual environments. With option \`-v\`, lists for the
+names and paths of the virtual environments. With \`-r\` option, i
 
     ${PROG_NAME} --create VENV_NAME SINGULARITY_IMAGE[.sif]
 
-Create a virtual enviroment named `VENV_NAME` inside
+Create a virtual enviroment named \`VENV_NAME\` inside
 "\$VENV_BASE_DIR/VENV_NAME" and associate it with the Singularity container
 image "SINGULARITY_IMAGE[.sif]".
 
@@ -152,7 +152,7 @@ venv_create() {
 
     local IMG_LINK_PATH="${VENV_DIR}/${IMG_LINK_NAME}"
     echo "INFO: Creating virtual environment \"${VENV_NAME}\" in \"${VENV_DIR}\"" >&2
-    mkdir "${VENV_DIR}"
+    mkdir -p "${VENV_DIR}"
     ln -s "${VENV_IMG_ABS}" "${IMG_LINK_PATH}"
     if (command -v symlinks >/dev/null) ; then
         echo "INFO: Command \"symlinks\" available, using relative symlink for \"${IMG_LINK_PATH}\"." >&2
@@ -160,7 +160,8 @@ venv_create() {
     else
         echo "INFO: Command \"symlinks\" not available, using absolute symlink for \"${IMG_LINK_PATH}\"." >&2
     fi
-    mkdir -p VENV_DIR="${VENV_DIR}/user"
+    mkdir -p "${VENV_DIR}/user"
+    VENV_DIR="${VENV_DIR}/user"
     echo "Created virtual environment \"${VENV_NAME}\", run \`venv ${VENV_NAME}\` to try it out." >&2
 }
 
