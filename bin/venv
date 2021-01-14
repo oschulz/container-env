@@ -90,7 +90,7 @@ invalid_argument_error() {
 
 
 venv_list() {
-    for dir in `echo /home/iwsatlas1/oschulz/.venv/*/rootfs2 /home/iwsatlas1/oschulz/.venv/*/rootfs.* | xargs dirname | grep -v '\*'`; do
+    for dir in `echo ${VENV_BASE_DIR}/*/rootfs.* | xargs dirname | grep -v '\*'`; do
         if [ "$1" == "-v" ] ; then
             echo "`basename ${dir}`: ${dir}"
         else
