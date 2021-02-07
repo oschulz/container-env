@@ -51,7 +51,7 @@ shell), otherwise a shell or a program with the given arguments.
     ${PROG_NAME} --list [-v]
 
 List all defined virtual environments. With option \`-v\`, lists for the
-names and paths of the virtual environments. With \`-r\` option, i
+names and paths of the virtual environments.
 
     ${PROG_NAME} --create VENV_NAME SINGULARITY_IMAGE[.sif]
 
@@ -231,7 +231,7 @@ else
         VENV_USER_MNT="${VENV_USER_DIR}"
     fi
 
-    EXTRA_OPTS=""
+    EXTRA_OPTS="${VENV_EXTRA_OPTS}"
     if (command -v nvidia-smi > /dev/null); then
         # echo "DEBUG: NVIDIA drivers available, adding singularity option \"--nv\"" >&2
         EXTRA_OPTS="${EXTRA_OPTS} --nv"
@@ -274,6 +274,7 @@ else
 
 
     export VENV_NAME="${VENV_NAME_ARG}"
+    export SINGULARITYENV_PS1="[\u@venv ${VENV_NAME}] > "
     export debian_chroot="${VENV_NAME_ARG}"
 
     export SINGULARITY_SHELL="${SINGULARITY_SHELL:-${SHELL}}"
