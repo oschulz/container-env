@@ -70,7 +70,7 @@ ENVIRONMENT VARIABLES
                     "user"-directory (located inside virtual environment
                     directory). Defaults to "/user".
 
-* VENV_USER_MNT     Site-independent mount point in container instance for
+* VENV_HOME_MNT     Site-independent mount point in container instance for
                     "\${HOME}". Defaults to "/homedir". "${HOME}" itself will
                     still (depeding on Singularity configuration) be available
                     under it's original path as well.
