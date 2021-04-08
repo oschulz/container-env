@@ -274,7 +274,7 @@ else
 
 
     export VENV_NAME="${VENV_NAME_ARG}"
-    export SINGULARITYENV_PS1="[\u@venv ${VENV_NAME}] > "
+    export SINGULARITYENV_PS1="[\u@\[\e[1m\]${VENV_NAME}\[\e[m\]\e[m venv] \w > "
     export debian_chroot="${VENV_NAME_ARG}"
 
     export SINGULARITY_SHELL="${SINGULARITY_SHELL:-${SHELL}}"
