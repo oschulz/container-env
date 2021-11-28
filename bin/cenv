@@ -16,6 +16,39 @@ if [ "${CENV_BASE_DIR}" = "${legacy_default_basedir}" ]; then
 fi
 
 
+singularity_cmd=`command -v singularity || true`
+shifter_cmd=`command -v shifter || true`
+
+export CENV_RUNTIME="${CENV_RUNTIME:-auto}"
+if [ "${CENV_RUNTIME}" = "auto" ] ; then
+    if [ -n "${singularity_cmd}" ] ; then
+        export CENV_RUNTIME="singularity"
+    elif  [ -n "${shifter_cmd}" ] ; then
+        export CENV_RUNTIME="shifter"
+    else
+        echo "ERROR: No cenv-compatible container runtime engine (singularity or shifter) found." >&2
+        exit 1
+    fi
+fi
+
+# echo "DEBUG: Selected container runtime engine ${CENV_RUNTIME}" >&2
+
+if [ "${CENV_RUNTIME}" = "singularity" ] ; then
+    if [ -z "${singularity_cmd}" ] ; then
+        echo "ERROR: Can't find singularity executable." >&2
+        exit 1
+    fi
+elif [ "${CENV_RUNTIME}" = "shifter" ] ; then
+    if [ -z "${shifter_cmd}" ] ; then
+        echo "ERROR: Can't find shifter executable." >&2
+        exit 1
+    fi
+else
+    echo "ERROR: Unsupported cenv container runtime engine \"${CENV_RUNTIME}\"." >&2
+    exit 1
+fi
+
+
 absname() {
     local REL_PATH="$1"
     local REL_DIRNAME="$(dirname "${REL_PATH}")"
@@ -45,6 +78,7 @@ ${PROG_NAME} - virtual enviroment management
     ${PROG_NAME} [shell|program [...]]
     ${PROG_NAME} --list
     ${PROG_NAME} --create CENV_NAME SINGULARITY_IMAGE.sif
+    ${PROG_NAME} --create CENV_NAME DOCKER_IMAGE
 
 Use and manage virtual environments based on Singularity containers/images.
 
@@ -70,6 +104,12 @@ Create a virtual enviroment named \`CENV_NAME\` inside
 "\$CENV_BASE_DIR/CENV_NAME" and associate it with the Singularity container
 image "SINGULARITY_IMAGE[.sif]".
 
+    ${PROG_NAME} --create CENV_NAME DOCKER_IMAGE
+
+Create a virtual enviroment named \`CENV_NAME\` inside
+"\$CENV_BASE_DIR/CENV_NAME" and associate it with `DOCKER_IMAGE` for use
+with shifter.
+
 
 ENVIRONMENT VARIABLES
 ---------------------
@@ -85,6 +125,9 @@ ENVIRONMENT VARIABLES
                     "\${HOME}". Defaults to "/homedir". "${HOME}" itself will
                     still (depeding on Singularity configuration) be available
                     under it's original path as well.
+
+* CENV_RUNTIME      cenv container runtime engine, either "singularity" or
+                    "shifter" or "auto" (the default).
 EOF
 } # swmod_list_usage()
 
@@ -123,56 +166,66 @@ cenv_create() {
         exit 1
     fi
 
-    local CENV_IMG_EXT=""
-    if [ -d "${CENV_IMG}" ]; then
-        if [ ! -e "${CENV_IMG}/bin/sh" ] ; then
-            echo "ERROR: Directory \"CENV_IMG\" doesn't seem to be a Singularit image (doesn't  contain \"bin/sh\")." >&2
-            exit 1
-        fi
-    elif [ -f "${CENV_IMG}" ]; then
-        local CENV_IMG_BASENAME=`basename "${CENV_IMG}"`
-        local CENV_IMG_EXT="${CENV_IMG_BASENAME##*.}"
-        case "${CENV_IMG_EXT}" in
-            "sif") ;;
-            "sqsh") ;;
-            "img") ;;
-            *)
-                echo "ERROR: Only singularity images of type directory, \"\*.sif\", \"\*.sqsh\" and \"\*.img\" are supported." >&2
-                exit 1
-                ;;
-        esac
-    else
-        echo "ERROR: Singularity image \"${CENV_IMG}\" doesn't exist or is not a file or directory." >&2
-        exit 1
-    fi
-
-    CENV_IMG_ABS=`absname "${CENV_IMG}"`
-
     local CENV_DIR="${CENV_BASE_DIR}/${CENV_NAME}"
-
     if [ -e "${CENV_DIR}" ] ; then
         echo "ERROR: Virtual enviromenment \"${CENV_NAME}\" (\"${CENV_DIR}\") already exists." >&2
         exit 1
     fi
 
-    if [ -z "${CENV_IMG_EXT}" ]; then
-        local IMG_LINK_NAME="rootfs"
+    if [ "${CENV_RUNTIME}" = "singularity" ] ; then
+        local CENV_IMG_EXT=""
+        if [ -d "${CENV_IMG}" ]; then
+            if [ ! -e "${CENV_IMG}/bin/sh" ] ; then
+                echo "ERROR: Directory \"CENV_IMG\" doesn't seem to be a Singularity image (doesn't  contain \"bin/sh\")." >&2
+                exit 1
+            fi
+        elif [ -f "${CENV_IMG}" ]; then
+            local CENV_IMG_BASENAME=`basename "${CENV_IMG}"`
+            local CENV_IMG_EXT="${CENV_IMG_BASENAME##*.}"
+            case "${CENV_IMG_EXT}" in
+                "sif") ;;
+                "sqsh") ;;
+                "img") ;;
+                *)
+                    echo "ERROR: Only singularity images of type directory, \"\*.sif\", \"\*.sqsh\" and \"\*.img\" are supported." >&2
+                    exit 1
+                    ;;
+            esac
+        else
+            echo "ERROR: Singularity image \"${CENV_IMG}\" doesn't exist or is not a file or directory." >&2
+            exit 1
+        fi
+
+        CENV_IMG_ABS=`absname "${CENV_IMG}"`
+
+        if [ -z "${CENV_IMG_EXT}" ]; then
+            local IMG_LINK_NAME="rootfs"
+        else
+            local IMG_LINK_NAME="rootfs.${CENV_IMG_EXT}"
+        fi
+
+        local IMG_LINK_PATH="${CENV_DIR}/${IMG_LINK_NAME}"
+        echo "INFO: Creating virtual environment \"${CENV_NAME}\" in \"${CENV_DIR}\"" >&2
+        mkdir -p "${CENV_DIR}"
+        ln -s "${CENV_IMG_ABS}" "${IMG_LINK_PATH}"
+        if (command -v symlinks >/dev/null) ; then
+            echo "INFO: Command \"symlinks\" available, using relative symlink for \"${IMG_LINK_PATH}\"." >&2
+            command -v symlinks >/dev/null && symlinks -c -o "${CENV_DIR}" >/dev/null || true
+        else
+            echo "INFO: Command \"symlinks\" not available, using absolute symlink for \"${IMG_LINK_PATH}\"." >&2
+        fi
+
+        mkdir -p "${CENV_DIR}/user"
+    elif [ "${CENV_RUNTIME}" = "shifter" ] ; then
+        mkdir -p "${CENV_DIR}"
+        IMG_LINKFILE="${CENV_DIR}/rootfs.shifter"
+        echo "${CENV_IMG}" > "${IMG_LINKFILE}"
+
+        # mkdir -p "${CENV_DIR}/user"
     else
-        local IMG_LINK_NAME="rootfs.${CENV_IMG_EXT}"
+        echo "ERROR: cenv internal error." >&2; exit 1
     fi
 
-    local IMG_LINK_PATH="${CENV_DIR}/${IMG_LINK_NAME}"
-    echo "INFO: Creating virtual environment \"${CENV_NAME}\" in \"${CENV_DIR}\"" >&2
-    mkdir -p "${CENV_DIR}"
-    ln -s "${CENV_IMG_ABS}" "${IMG_LINK_PATH}"
-    if (command -v symlinks >/dev/null) ; then
-        echo "INFO: Command \"symlinks\" available, using relative symlink for \"${IMG_LINK_PATH}\"." >&2
-        command -v symlinks >/dev/null && symlinks -c -o "${CENV_DIR}" >/dev/null || true
-    else
-        echo "INFO: Command \"symlinks\" not available, using absolute symlink for \"${IMG_LINK_PATH}\"." >&2
-    fi
-    mkdir -p "${CENV_DIR}/user"
-    CENV_DIR="${CENV_DIR}/user"
     echo "Created virtual environment \"${CENV_NAME}\", run \`cenv ${CENV_NAME}\` to try it out." >&2
 }
 
@@ -206,6 +259,12 @@ elif [ "${CENV_NAME_ARG}" = "--list" ] ; then
 elif [ "${CENV_NAME_ARG}" = "--create" ] ; then
     cenv_create "$@"
 else
+    CENV_DIR="${CENV_BASE_DIR}/${CENV_NAME_ARG}"
+
+    export CENV_NAME="${CENV_NAME_ARG}"
+    # Legacy support:
+    export VENV_NAME="${CENV_NAME_ARG}"
+
     if [ "${CMD}" = "shell" ]; then
         shift 1
     elif [ -z "${CMD}" ]; then
@@ -213,60 +272,6 @@ else
     else
         CMD="exec"
     fi
-
-    CENV_DIR="${CENV_BASE_DIR}/${CENV_NAME_ARG}"
-
-    if [ ! -d "${CENV_DIR}" ]; then
-        echo "ERROR: cenv directory \"${CENV_DIR}\" doesn't exist." >&2
-        exit 1
-    fi
-
-    if [ -d "${CENV_DIR}/rootfs" ]; then
-        FS_IMG="${CENV_DIR}/rootfs/"
-    elif [ -f "${CENV_DIR}/rootfs.sif" ]; then
-        FS_IMG="${CENV_DIR}/rootfs.sif"
-    elif [ -f "${CENV_DIR}/rootfs.sqsh" ]; then
-        FS_IMG="${CENV_DIR}/rootfs.sqsh"
-    elif [ -f "${CENV_DIR}/rootfs.img" ]; then
-        FS_IMG="${CENV_DIR}/rootfs.img"
-    else
-        echo "ERROR: No rootfs found in \"${CENV_DIR}\"." >&2
-        exit 1
-    fi
-
-
-    CENV_USER_DIR="${CENV_DIR}/user"
-    mkdir -p "${CENV_USER_DIR}"
-
-    if [ "${CENV_USER_MNT}" == "none" ] ; then
-        CENV_USER_MNT="${CENV_USER_DIR}"
-    fi
-
-    EXTRA_OPTS="${CENV_EXTRA_OPTS}"
-    if (command -v nvidia-smi > /dev/null); then
-        # echo "DEBUG: NVIDIA drivers available, adding singularity option \"--nv\"" >&2
-        EXTRA_OPTS="${EXTRA_OPTS} --nv"
-    fi
-    if [ -d "/etc/OpenCL/vendors" ]; then
-        # echo "DEBUG: OpenCL available, mounting vendors directory" >&2
-        EXTRA_OPTS="${EXTRA_OPTS} -B /etc/OpenCL/vendors"
-    fi
-
-    # echo "DEBUG: CENV_DIR=\"${CENV_DIR}\"" >&2
-    # echo "DEBUG: CENV_USER_DIR=\"${CENV_USER_DIR}\"" >&2
-    # echo "DEBUG: CENV_USER_MNT=\"${CENV_USER_MNT}\"" >&2
-    # echo "DEBUG: FS_IMG=\"${FS_IMG}\"" >&2
-    # echo "DEBUG: CMD=\"${CMD} $@" >&2
-
-    if (grep -q ' avx2 ' /proc/cpuinfo) ; then
-        export OPENBLAS_CORETYPE="Haswell"
-    elif (grep -q ' avx ' /proc/cpuinfo) ; then
-        export OPENBLAS_CORETYPE="Sandybridge"
-    fi
-
-    export SWMOD_INST_BASE="${CENV_USER_MNT}/.local/sw"
-    export SWMOD_MODPATH="${SWMOD_INST_BASE}"
-
 
     # Special exports for Python:
     export PYTHONUSERBASE="${CENV_USER_MNT}/.local"
@@ -283,23 +288,97 @@ else
     export JULIA_DEPOT_PATH="${CENV_USER_MNT}/.julia:"
     export JULIA_PKG_DEVDIR="${CENV_USER_MNT}/.julia/dev"
 
+    if [ "${CENV_RUNTIME}" = "singularity" ] ; then
+        if [ ! -d "${CENV_DIR}" ]; then
+            echo "ERROR: cenv directory \"${CENV_DIR}\" doesn't exist." >&2
+            exit 1
+        fi
 
-    export CENV_NAME="${CENV_NAME_ARG}"
-    # Legacy support:
-    export VENV_NAME="${CENV_NAME_ARG}"
+        if [ -d "${CENV_DIR}/rootfs" ]; then
+            FS_IMG="${CENV_DIR}/rootfs/"
+        elif [ -f "${CENV_DIR}/rootfs.sif" ]; then
+            FS_IMG="${CENV_DIR}/rootfs.sif"
+        elif [ -f "${CENV_DIR}/rootfs.sqsh" ]; then
+            FS_IMG="${CENV_DIR}/rootfs.sqsh"
+        elif [ -f "${CENV_DIR}/rootfs.img" ]; then
+            FS_IMG="${CENV_DIR}/rootfs.img"
+        else
+            echo "ERROR: No rootfs found in \"${CENV_DIR}\"." >&2
+            exit 1
+        fi
 
-    export SINGULARITYENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\]\e[m cenv] \w > "
-    export debian_chroot="${CENV_NAME_ARG}"
+        CENV_USER_DIR="${CENV_DIR}/user"
+        mkdir -p "${CENV_USER_DIR}"
 
-    export SINGULARITY_SHELL="${SINGULARITY_SHELL:-${SHELL}}"
+        if [ "${CENV_USER_MNT}" == "none" ] ; then
+            CENV_USER_MNT="${CENV_USER_DIR}"
+        fi
 
-    if [ "${CENV_USER_MNT}" != "${CENV_USER_DIR}" ] ; then
-        exec singularity "${CMD}" ${EXTRA_OPTS} \
-            -B "${CENV_USER_DIR}:${CENV_USER_MNT}" \
-            -B "${HOME}:${CENV_HOME_MNT}" \
-            "${FS_IMG}" "$@"
+        EXTRA_OPTS="${CENV_EXTRA_OPTS}"
+        if (command -v nvidia-smi > /dev/null); then
+            # echo "DEBUG: NVIDIA drivers available, adding singularity option \"--nv\"" >&2
+            EXTRA_OPTS="${EXTRA_OPTS} --nv"
+        fi
+        if [ -d "/etc/OpenCL/vendors" ]; then
+            # echo "DEBUG: OpenCL available, mounting vendors directory" >&2
+            EXTRA_OPTS="${EXTRA_OPTS} -B /etc/OpenCL/vendors"
+        fi
+
+        # echo "DEBUG: CENV_DIR=\"${CENV_DIR}\"" >&2
+        # echo "DEBUG: CENV_USER_DIR=\"${CENV_USER_DIR}\"" >&2
+        # echo "DEBUG: CENV_USER_MNT=\"${CENV_USER_MNT}\"" >&2
+        # echo "DEBUG: FS_IMG=\"${FS_IMG}\"" >&2
+        # echo "DEBUG: CMD=\"${CMD} $@" >&2
+
+        if (grep -q ' avx2 ' /proc/cpuinfo) ; then
+            export OPENBLAS_CORETYPE="Haswell"
+        elif (grep -q ' avx ' /proc/cpuinfo) ; then
+            export OPENBLAS_CORETYPE="Sandybridge"
+        fi
+
+        export SWMOD_INST_BASE="${CENV_USER_MNT}/.local/sw"
+        export SWMOD_MODPATH="${SWMOD_INST_BASE}"
+
+        export SINGULARITYENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\]\e[m cenv] \w > "
+        export debian_chroot="${CENV_NAME_ARG}"
+
+        export SINGULARITY_SHELL="${SINGULARITY_SHELL:-${SHELL}}"
+
+        if [ "${CENV_USER_MNT}" != "${CENV_USER_DIR}" ] ; then
+            exec singularity "${CMD}" ${EXTRA_OPTS} \
+                -B "${CENV_USER_DIR}:${CENV_USER_MNT}" \
+                -B "${HOME}:${CENV_HOME_MNT}" \
+                "${FS_IMG}" "$@"
+        else
+            exec singularity "${CMD}" ${EXTRA_OPTS} \
+                "${FS_IMG}" "$@"
+        fi
+    elif [ "${CENV_RUNTIME}" = "shifter" ] ; then
+        img_ref_file="${CENV_DIR}/rootfs.shifter"
+        if [ ! -f "${img_ref_file}" ] ; then
+            echo "ERROR: Missing image reference \"${img_ref_file}\"" >&2; exit 1
+        fi
+        img_name=`cat "${img_ref_file}"`
+
+        # CENV_USER_DIR="${CENV_DIR}/user"
+        # Workaround, shifter volume mounting doesn't seem to like deep directories:
+        parent_dir=$(dirname `dirname "${CENV_DIR}"`)
+        subst_userdir=".cenv_userdir_${CENV_NAME}"
+        if [ ! -e "${CENV_DIR}/user" ] ; then
+            ln -s "../../${subst_userdir}" "${CENV_DIR}/user"
+        fi
+        CENV_USER_DIR="${parent_dir}/${subst_userdir}"
+        mkdir -p "${CENV_USER_DIR}"
+
+        if [ "${CENV_USER_MNT}" != "${CENV_USER_DIR}" ] ; then
+            exec shifter --image="${img_name}" \
+                --volume="${CENV_USER_DIR}:${CENV_USER_MNT};${HOME}:${CENV_HOME_MNT}" \
+                -- "$@"
+        else
+            exec shifter --image="${img_name}" \
+                -- "$@"
+        fi
     else
-        exec singularity "${CMD}" ${EXTRA_OPTS} \
-            "${FS_IMG}" "$@"
+        echo "ERROR: cenv internal error." >&2; exit 1
     fi
 fi
