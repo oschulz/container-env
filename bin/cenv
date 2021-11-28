@@ -37,7 +37,7 @@ absname() {
 }
 
 
-venv_help() {
+cenv_help() {
 local PROG_NAME=`basename $0`
 cat <<EOF
 ${PROG_NAME} - virtual enviroment management
@@ -100,7 +100,7 @@ invalid_argument_error() {
 } # swmod_list_usage()
 
 
-venv_list() {
+cenv_list() {
     for dir in `echo ${CENV_BASE_DIR}/*/rootfs.* | xargs dirname | grep -v '\*'`; do
         if [ "$1" == "-v" ] ; then
             echo "`basename ${dir}`: ${dir}"
@@ -111,7 +111,7 @@ venv_list() {
 }
 
 
-venv_create() {
+cenv_create() {
     local CENV_NAME="$1"
     local CENV_IMG="$2"
     if [ -z "${CENV_NAME}" -o -z "${CENV_IMG}" ] ; then
@@ -173,7 +173,7 @@ venv_create() {
     fi
     mkdir -p "${CENV_DIR}/user"
     CENV_DIR="${CENV_DIR}/user"
-    echo "Created virtual environment \"${CENV_NAME}\", run \`venv ${CENV_NAME}\` to try it out." >&2
+    echo "Created virtual environment \"${CENV_NAME}\", run \`cenv ${CENV_NAME}\` to try it out." >&2
 }
 
 
@@ -193,18 +193,18 @@ CMD="$1"
 
 if [ "${CENV_NAME_ARG}" = "${CENV_NAME}" ] ; then
     if [ "${CMD}" = "shell" -o -z "${CMD}" ]; then
-        echo "Already in venv ${CENV_NAME}, entering new shell ${SHELL} ..." >&2
+        echo "Already in cenv ${CENV_NAME}, entering new shell ${SHELL} ..." >&2
         "${SHELL}"
     else
-        echo "Note: Already in venv ${CENV_NAME}." >&2
+        echo "Note: Already in cenv ${CENV_NAME}." >&2
         exec "$@"
     fi
 elif [ "${CENV_NAME_ARG}" = "--help" ] ; then
-    venv_help
+    cenv_help
 elif [ "${CENV_NAME_ARG}" = "--list" ] ; then
-    venv_list "$@"
+    cenv_list "$@"
 elif [ "${CENV_NAME_ARG}" = "--create" ] ; then
-    venv_create "$@"
+    cenv_create "$@"
 else
     if [ "${CMD}" = "shell" ]; then
         shift 1
@@ -217,7 +217,7 @@ else
     CENV_DIR="${CENV_BASE_DIR}/${CENV_NAME_ARG}"
 
     if [ ! -d "${CENV_DIR}" ]; then
-        echo "ERROR: venv directory \"${CENV_DIR}\" doesn't exist." >&2
+        echo "ERROR: cenv directory \"${CENV_DIR}\" doesn't exist." >&2
         exit 1
     fi
 
@@ -288,7 +288,7 @@ else
     # Legacy support:
     export VENV_NAME="${CENV_NAME_ARG}"
 
-    export SINGULARITYENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\]\e[m venv] \w > "
+    export SINGULARITYENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\]\e[m cenv] \w > "
     export debian_chroot="${CENV_NAME_ARG}"
 
     export SINGULARITY_SHELL="${SINGULARITY_SHELL:-${SHELL}}"
