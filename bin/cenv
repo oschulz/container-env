@@ -80,7 +80,9 @@ ${PROG_NAME} - virtual enviroment management
     ${PROG_NAME} --create CENV_NAME SINGULARITY_IMAGE.sif
     ${PROG_NAME} --create CENV_NAME DOCKER_IMAGE
 
-Use and manage virtual environments based on Singularity containers/images.
+Use and manage virtual environments based on Singularity (https://singularity.hpcng.org)
+or Shifter (https://docs.nersc.gov/development/shifter) containers/images.
+
 
 USAGE
 -----
@@ -91,7 +93,6 @@ USAGE
 
 Runs either the default action defined for the container image (often, a
 shell), otherwise a shell or a program with the given arguments.
-
 
     ${PROG_NAME} --list [-v]
 
@@ -107,8 +108,8 @@ image "SINGULARITY_IMAGE[.sif]".
     ${PROG_NAME} --create CENV_NAME DOCKER_IMAGE
 
 Create a virtual enviroment named \`CENV_NAME\` inside
-"\$CENV_BASE_DIR/CENV_NAME" and associate it with `DOCKER_IMAGE` for use
-with shifter.
+"\$CENV_BASE_DIR/CENV_NAME" and associate it with \`DOCKER_IMAGE\` for use
+with Shifter.
 
 
 ENVIRONMENT VARIABLES
