@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# echo "" > "$HOME/.vscode-ssh.log"
+# echo `date -uIs` >> "$HOME/.vscode-ssh.log"
+# echo "$@" >> "$HOME/.vscode-ssh.log"
+
+# Get last command line argument, should be hostname/alias
+for trghost; do true; done
+
+# Parse host-aliases of form "cenvname~hostname"
+cenvname=`echo "${trghost}" | sed 's/^\(\(.*\)~\)\?.*$/\2/'`
+
+# Note: VS Code will override "-t" option with "-T".
+
+if [ -n "${cenvname}" ]; then
+    exec ssh -t "$@" 'cenv_EXTRA_OPTS="-B $XDG_RUNTIME_DIR:$XDG_RUNTIME_DIR"' '$HOME/.local/bin/cenv ' "${cenvname}"
+else
+    exec ssh "$@"
+fi
