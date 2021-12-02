@@ -290,6 +290,8 @@ else
     export JULIA_PKG_DEVDIR="${CENV_USER_MNT}/.julia/dev"
 
     if [ "${CENV_RUNTIME}" = "singularity" ] ; then
+        EXTRA_OPTS="${CENV_SINGULARITY_OPTS}"
+
         if [ ! -d "${CENV_DIR}" ]; then
             echo "ERROR: cenv directory \"${CENV_DIR}\" doesn't exist." >&2
             exit 1
@@ -355,6 +357,8 @@ else
                 "${FS_IMG}" "$@"
         fi
     elif [ "${CENV_RUNTIME}" = "shifter" ] ; then
+        EXTRA_OPTS="${CENV_SHIFTER_OPTS}"
+
         img_ref_file="${CENV_DIR}/rootfs.shifter"
         if [ ! -f "${img_ref_file}" ] ; then
             echo "ERROR: Missing image reference \"${img_ref_file}\"" >&2; exit 1
@@ -374,10 +378,10 @@ else
         if [ "${CENV_USER_MNT}" != "${CENV_USER_DIR}" ] ; then
             exec shifter --image="${img_name}" \
                 --volume="${CENV_USER_DIR}:${CENV_USER_MNT};${HOME}:${CENV_HOME_MNT}" \
-                -- "$@"
+                 ${EXTRA_OPTS} -- "$@"
         else
             exec shifter --image="${img_name}" \
-                -- "$@"
+                 ${EXTRA_OPTS} -- "$@"
         fi
     else
         echo "ERROR: cenv internal error." >&2; exit 1

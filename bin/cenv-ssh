@@ -13,7 +13,7 @@ cenvname=`echo "${trghost}" | sed 's/^\(\(.*\)~\)\?.*$/\2/'`
 # Note: VS Code will override "-t" option with "-T".
 
 if [ -n "${cenvname}" ]; then
-    exec ssh -t "$@" 'CENV_EXTRA_OPTS="-B $XDG_RUNTIME_DIR:$XDG_RUNTIME_DIR"' '$HOME/.local/bin/cenv ' "${cenvname}"
+    exec ssh -t "$@" '$HOME/.local/bin/cenv ' "${cenvname}"
 else
     exec ssh "$@"
 fi
