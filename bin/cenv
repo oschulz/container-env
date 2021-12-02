@@ -266,10 +266,6 @@ else
     # Legacy support:
     export VENV_NAME="${CENV_NAME_ARG}"
 
-    export CENV_RUNTIME_DIR="${TMPDIR:-/tmp}/`whoami`/cenv/${CENV_NAME}/run"
-    mkdir -p "${CENV_RUNTIME_DIR}"
-    export XDG_RUNTIME_DIR="${CENV_RUNTIME_DIR}"
-
     if [ "${CMD}" = "shell" ]; then
         shift 1
     elif [ -z "${CMD}" ]; then
@@ -325,6 +321,9 @@ else
             # echo "DEBUG: NVIDIA drivers available, adding singularity option \"--nv\"" >&2
             EXTRA_OPTS="${EXTRA_OPTS} --nv"
         fi
+        if [[ "$XDG_RUNTIME_DIR" == /run/* ]] ; then
+            EXTRA_OPTS="${EXTRA_OPTS} -B $XDG_RUNTIME_DIR"
+        fi
         if [ -d "/etc/OpenCL/vendors" ]; then
             # echo "DEBUG: OpenCL available, mounting vendors directory" >&2
             EXTRA_OPTS="${EXTRA_OPTS} -B /etc/OpenCL/vendors"
@@ -361,6 +360,9 @@ else
         fi
     elif [ "${CENV_RUNTIME}" = "shifter" ] ; then
         EXTRA_OPTS="${CENV_SHIFTER_OPTS}"
+
+        export XDG_RUNTIME_DIR="${TMPDIR:-/tmp}/`whoami`/run"
+        mkdir -p "${XDG_RUNTIME_DIR}"
 
         img_ref_file="${CENV_DIR}/rootfs.shifter"
         if [ ! -f "${img_ref_file}" ] ; then
