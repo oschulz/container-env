@@ -21,8 +21,8 @@ for /f "tokens=* delims= " %%a in ("%All_BUT_LAST_ARG%") do (
 
 Rem split at tilde (~)
 for /f "tokens=1,2 delims=~" %%a in ("%LAST_ARG%") do (
-  set Server=%%a
-  set Cenv=%%b
+set Cenv=%%a
+set Server=%%b
 )
 
 Rem Check if there are arguments and if container is used
