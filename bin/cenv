@@ -16,38 +16,39 @@ if [ "${CENV_BASE_DIR}" = "${legacy_default_basedir}" ]; then
 fi
 
 
-singularity_cmd=`command -v singularity || true`
-shifter_cmd=`command -v shifter || true`
+set_cenv_runtime() {
+    singularity_cmd=`command -v singularity || true`
+    shifter_cmd=`command -v shifter || true`
 
-export CENV_RUNTIME="${CENV_RUNTIME:-auto}"
-if [ "${CENV_RUNTIME}" = "auto" ] ; then
-    if [ -n "${singularity_cmd}" ] ; then
-        export CENV_RUNTIME="singularity"
-    elif  [ -n "${shifter_cmd}" ] ; then
-        export CENV_RUNTIME="shifter"
+    export CENV_RUNTIME="${CENV_RUNTIME:-auto}"
+    if [ "${CENV_RUNTIME}" = "auto" ] ; then
+        if [ -n "${singularity_cmd}" ] ; then
+            export CENV_RUNTIME="singularity"
+        elif  [ -n "${shifter_cmd}" ] ; then
+            export CENV_RUNTIME="shifter"
+        else
+            echo "ERROR: No cenv-compatible container runtime engine (singularity or shifter) found." >&2
+            exit 1
+        fi
+    fi
+
+    # echo "DEBUG: Selected container runtime engine ${CENV_RUNTIME}" >&2
+
+    if [ "${CENV_RUNTIME}" = "singularity" ] ; then
+        if [ -z "${singularity_cmd}" ] ; then
+            echo "ERROR: Can't find singularity executable." >&2
+            exit 1
+        fi
+    elif [ "${CENV_RUNTIME}" = "shifter" ] ; then
+        if [ -z "${shifter_cmd}" ] ; then
+            echo "ERROR: Can't find shifter executable." >&2
+            exit 1
+        fi
     else
-        echo "ERROR: No cenv-compatible container runtime engine (singularity or shifter) found." >&2
+        echo "ERROR: Unsupported cenv container runtime engine \"${CENV_RUNTIME}\"." >&2
         exit 1
     fi
-fi
-
-# echo "DEBUG: Selected container runtime engine ${CENV_RUNTIME}" >&2
-
-if [ "${CENV_RUNTIME}" = "singularity" ] ; then
-    if [ -z "${singularity_cmd}" ] ; then
-        echo "ERROR: Can't find singularity executable." >&2
-        exit 1
-    fi
-elif [ "${CENV_RUNTIME}" = "shifter" ] ; then
-    if [ -z "${shifter_cmd}" ] ; then
-        echo "ERROR: Can't find shifter executable." >&2
-        exit 1
-    fi
-else
-    echo "ERROR: Unsupported cenv container runtime engine \"${CENV_RUNTIME}\"." >&2
-    exit 1
-fi
-
+}
 
 absname() {
     local REL_PATH="$1"
@@ -173,6 +174,7 @@ cenv_create() {
         exit 1
     fi
 
+    set_cenv_runtime
     if [ "${CENV_RUNTIME}" = "singularity" ] ; then
         local CENV_IMG_EXT=""
         if [ -d "${CENV_IMG}" ]; then
@@ -244,7 +246,6 @@ fi
 shift 1
 CMD="$1"
 
-
 if [ "${CENV_NAME_ARG}" = "${CENV_NAME}" ] ; then
     if [ "${CMD}" = "shell" -o -z "${CMD}" ]; then
         echo "Already in cenv ${CENV_NAME}, entering new shell ${SHELL} ..." >&2
@@ -289,6 +290,7 @@ else
     export JULIA_DEPOT_PATH="${CENV_USER_MNT}/.julia:"
     export JULIA_PKG_DEVDIR="${CENV_USER_MNT}/.julia/dev"
 
+    set_cenv_runtime
     if [ "${CENV_RUNTIME}" = "singularity" ] ; then
         EXTRA_OPTS="${CENV_SINGULARITY_OPTS}"
 
