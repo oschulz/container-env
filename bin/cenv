@@ -17,24 +17,32 @@ fi
 
 
 set_cenv_runtime() {
+    apptainer_cmd=`command -v apptainer || true`
     singularity_cmd=`command -v singularity || true`
     shifter_cmd=`command -v shifter || true`
 
     export CENV_RUNTIME="${CENV_RUNTIME:-auto}"
     if [ "${CENV_RUNTIME}" = "auto" ] ; then
-        if [ -n "${singularity_cmd}" ] ; then
+        if [ -n "${apptainer_cmd}" ] ; then
+            export CENV_RUNTIME="apptainer"
+        elif [ -n "${singularity_cmd}" ] ; then
             export CENV_RUNTIME="singularity"
         elif  [ -n "${shifter_cmd}" ] ; then
             export CENV_RUNTIME="shifter"
         else
-            echo "ERROR: No cenv-compatible container runtime engine (singularity or shifter) found." >&2
+            echo "ERROR: No cenv-compatible container runtime engine (apptainer, singularity or shifter) found." >&2
             exit 1
         fi
     fi
 
     # echo "DEBUG: Selected container runtime engine ${CENV_RUNTIME}" >&2
 
-    if [ "${CENV_RUNTIME}" = "singularity" ] ; then
+    if [ "${CENV_RUNTIME}" = "apptainer" ] ; then
+        if [ -z "${apptainer_cmd}" ] ; then
+            echo "ERROR: Can't find apptainer executable." >&2
+            exit 1
+        fi
+    elif [ "${CENV_RUNTIME}" = "singularity" ] ; then
         if [ -z "${singularity_cmd}" ] ; then
             echo "ERROR: Can't find singularity executable." >&2
             exit 1
@@ -78,11 +86,13 @@ ${PROG_NAME} - virtual enviroment management
 
     ${PROG_NAME} [shell|program [...]]
     ${PROG_NAME} --list
+    ${PROG_NAME} --create CENV_NAME APPTAINER_IMAGE.sif
     ${PROG_NAME} --create CENV_NAME SINGULARITY_IMAGE.sif
     ${PROG_NAME} --create CENV_NAME DOCKER_IMAGE
 
-Use and manage virtual environments based on Singularity (https://singularity.hpcng.org)
-or Shifter (https://docs.nersc.gov/development/shifter) containers/images.
+Use and manage virtual environments based on Apptainer (https://apptainer.org)
+Singularity (https://sylabs.io) or Shifter
+(https://docs.nersc.gov/development/shifter) containers/images.
 
 
 USAGE
@@ -100,11 +110,11 @@ shell), otherwise a shell or a program with the given arguments.
 List all defined virtual environments. With option \`-v\`, lists for the
 names and paths of the virtual environments.
 
-    ${PROG_NAME} --create CENV_NAME SINGULARITY_IMAGE[.sif]
+    ${PROG_NAME} --create CENV_NAME APPTAINER_IMAGE[.sif]
 
 Create a virtual enviroment named \`CENV_NAME\` inside
-"\$CENV_BASE_DIR/CENV_NAME" and associate it with the Singularity container
-image "SINGULARITY_IMAGE[.sif]".
+"\$CENV_BASE_DIR/CENV_NAME" and associate it with the Apptainer container
+image "Apptainer_IMAGE[.sif]".
 
     ${PROG_NAME} --create CENV_NAME DOCKER_IMAGE
 
@@ -128,8 +138,8 @@ ENVIRONMENT VARIABLES
                     still (depeding on Singularity configuration) be available
                     under it's original path as well.
 
-* CENV_RUNTIME      cenv container runtime engine, either "singularity" or
-                    "shifter" or "auto" (the default).
+* CENV_RUNTIME      cenv container runtime engine, either "apptainer",
+                    "singularity" or "shifter" or "auto" (the default).
 EOF
 } # swmod_list_usage()
 
@@ -175,11 +185,12 @@ cenv_create() {
     fi
 
     set_cenv_runtime
-    if [ "${CENV_RUNTIME}" = "singularity" ] ; then
+    if [ "${CENV_RUNTIME}" = "apptainer" ] ||
+       [ "${CENV_RUNTIME}" = "singularity" ] ; then
         local CENV_IMG_EXT=""
         if [ -d "${CENV_IMG}" ]; then
             if [ ! -e "${CENV_IMG}/bin/sh" ] ; then
-                echo "ERROR: Directory \"CENV_IMG\" doesn't seem to be a Singularity image (doesn't  contain \"bin/sh\")." >&2
+                echo "ERROR: Directory \"CENV_IMG\" doesn't seem to be a Apptainer or Singularity image (doesn't contain \"bin/sh\")." >&2
                 exit 1
             fi
         elif [ -f "${CENV_IMG}" ]; then
@@ -190,12 +201,12 @@ cenv_create() {
                 "sqsh") ;;
                 "img") ;;
                 *)
-                    echo "ERROR: Only singularity images of type directory, \"\*.sif\", \"\*.sqsh\" and \"\*.img\" are supported." >&2
+                    echo "ERROR: Only Apptainer/Singularity images of type directory, \"\*.sif\", \"\*.sqsh\" and \"\*.img\" are supported." >&2
                     exit 1
                     ;;
             esac
         else
-            echo "ERROR: Singularity image \"${CENV_IMG}\" doesn't exist or is not a file or directory." >&2
+            echo "ERROR: Apptainer/Singularity image \"${CENV_IMG}\" doesn't exist or is not a file or directory." >&2
             exit 1
         fi
 
@@ -291,8 +302,8 @@ else
     export JULIA_PKG_DEVDIR="${CENV_USER_MNT}/.julia/dev"
 
     set_cenv_runtime
-    if [ "${CENV_RUNTIME}" = "singularity" ] ; then
-        EXTRA_OPTS="${CENV_SINGULARITY_OPTS}"
+    if [ "${CENV_RUNTIME}" = "apptainer" ] ||
+       [ "${CENV_RUNTIME}" = "singularity" ]; then
 
         if [ ! -d "${CENV_DIR}" ]; then
             echo "ERROR: cenv directory \"${CENV_DIR}\" doesn't exist." >&2
@@ -317,6 +328,12 @@ else
 
         if [ "${CENV_USER_MNT}" == "none" ] ; then
             CENV_USER_MNT="${CENV_USER_DIR}"
+        fi
+
+        if [ "${CENV_RUNTIME}" = "apptainer" ]; then
+            EXTRA_OPTS="${CENV_APPTAINER_OPTS}"
+        else
+            EXTRA_OPTS="${CENV_SINGULARITY_OPTS}"
         fi
 
         if (command -v nvidia-smi > /dev/null); then
@@ -346,18 +363,23 @@ else
         export SWMOD_INST_BASE="${CENV_USER_MNT}/.local/sw"
         export SWMOD_MODPATH="${SWMOD_INST_BASE}"
 
-        export SINGULARITYENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\]\e[m cenv] \w > "
+        if [ "${CENV_RUNTIME}" = "apptainer" ]; then
+            export APPTAINERENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\]\e[m cenv] \w > "
+            export APPTAINER_SHELL="${APPTAINER_SHELL:-${SHELL}}"
+        else
+            export SINGULARITYENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\]\e[m cenv] \w > "
+            export SINGULARITY_SHELL="${SINGULARITY_SHELL:-${SHELL}}"
+        fi
+
         export debian_chroot="${CENV_NAME}"
 
-        export SINGULARITY_SHELL="${SINGULARITY_SHELL:-${SHELL}}"
-
         if [ "${CENV_USER_MNT}" != "${CENV_USER_DIR}" ] ; then
-            exec singularity "${CMD}" ${EXTRA_OPTS} \
+            exec "${CENV_RUNTIME}" "${CMD}" ${EXTRA_OPTS} \
                 -B "${CENV_USER_DIR}:${CENV_USER_MNT}" \
                 -B "${HOME}:${CENV_HOME_MNT}" \
                 "${FS_IMG}" "$@"
         else
-            exec singularity "${CMD}" ${EXTRA_OPTS} \
+            exec "${CENV_RUNTIME}" "${CMD}" ${EXTRA_OPTS} \
                 "${FS_IMG}" "$@"
         fi
     elif [ "${CENV_RUNTIME}" = "shifter" ] ; then
