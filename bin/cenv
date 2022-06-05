@@ -301,6 +301,9 @@ else
     export JULIA_DEPOT_PATH="${CENV_USER_MNT}/.julia:"
     export JULIA_PKG_DEVDIR="${CENV_USER_MNT}/.julia/dev"
 
+    # Add user bin dir to path:
+    export PATH="${CENV_USER_MNT}/.local/bin:$PATH"
+
     set_cenv_runtime
     if [ "${CENV_RUNTIME}" = "apptainer" ] ||
        [ "${CENV_RUNTIME}" = "singularity" ]; then
