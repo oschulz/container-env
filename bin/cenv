@@ -301,9 +301,6 @@ else
     export JULIA_DEPOT_PATH="${CENV_USER_MNT}/.julia:"
     export JULIA_PKG_DEVDIR="${CENV_USER_MNT}/.julia/dev"
 
-    # Add user bin dir to path:
-    export PATH="${CENV_USER_MNT}/.local/bin:$PATH"
-
     set_cenv_runtime
     if [ "${CENV_RUNTIME}" = "apptainer" ] ||
        [ "${CENV_RUNTIME}" = "singularity" ]; then
@@ -369,9 +366,12 @@ else
         if [ "${CENV_RUNTIME}" = "apptainer" ]; then
             export APPTAINERENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\]\e[m cenv] \w > "
             export APPTAINER_SHELL="${APPTAINER_SHELL:-${SHELL}}"
+            # Add user bin dir to path:
+            export APPTAINERENV_APPEND_PATH="${CENV_USER_MNT}/.local/bin:"
         else
             export SINGULARITYENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\]\e[m cenv] \w > "
             export SINGULARITY_SHELL="${SINGULARITY_SHELL:-${SHELL}}"
+            export SINGULARITYENV_APPEND_PATH="${CENV_USER_MNT}/.local/bin:"
         fi
 
         export debian_chroot="${CENV_NAME}"
