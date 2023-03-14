@@ -341,13 +341,14 @@ else
                 # echo "DEBUG: NVIDIA drivers available, adding singularity option \"--nv\"" >&2
                 EXTRA_OPTS="${EXTRA_OPTS} --nv"
             fi
+            if [ -d "/etc/OpenCL/vendors" ]; then
+                # echo "DEBUG: OpenCL available, mounting vendors directory" >&2
+                EXTRA_OPTS="${EXTRA_OPTS} -B /etc/OpenCL/vendors"
+            fi
         fi
+
         if [[ "$XDG_RUNTIME_DIR" == /run/* ]] ; then
             EXTRA_OPTS="${EXTRA_OPTS} -B $XDG_RUNTIME_DIR"
-        fi
-        if [ -d "/etc/OpenCL/vendors" ]; then
-            # echo "DEBUG: OpenCL available, mounting vendors directory" >&2
-            EXTRA_OPTS="${EXTRA_OPTS} -B /etc/OpenCL/vendors"
         fi
 
         # echo "DEBUG: CENV_DIR=\"${CENV_DIR}\"" >&2
