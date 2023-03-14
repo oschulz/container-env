@@ -336,9 +336,11 @@ else
             EXTRA_OPTS="${CENV_SINGULARITY_OPTS}"
         fi
 
-        if (command -v nvidia-smi > /dev/null); then
-            # echo "DEBUG: NVIDIA drivers available, adding singularity option \"--nv\"" >&2
-            EXTRA_OPTS="${EXTRA_OPTS} --nv"
+        if [ "${CENV_GPUS}" != "none" ]; then
+            if (command -v nvidia-smi > /dev/null); then
+                # echo "DEBUG: NVIDIA drivers available, adding singularity option \"--nv\"" >&2
+                EXTRA_OPTS="${EXTRA_OPTS} --nv"
+            fi
         fi
         if [[ "$XDG_RUNTIME_DIR" == /run/* ]] ; then
             EXTRA_OPTS="${EXTRA_OPTS} -B $XDG_RUNTIME_DIR"
