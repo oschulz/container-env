@@ -370,11 +370,11 @@ else
             export APPTAINERENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\]\e[m cenv] \w > "
             export APPTAINER_SHELL="${APPTAINER_SHELL:-${SHELL}}"
             # Add user bin dir to path:
-            export APPTAINERENV_APPEND_PATH="${CENV_USER_MNT}/.local/bin:"
+            export APPTAINERENV_PREPEND_PATH="${CENV_USER_MNT}/.local/bin:"
         else
             export SINGULARITYENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\]\e[m cenv] \w > "
             export SINGULARITY_SHELL="${SINGULARITY_SHELL:-${SHELL}}"
-            export SINGULARITYENV_APPEND_PATH="${CENV_USER_MNT}/.local/bin:"
+            export SINGULARITYENV_PREPEND_PATH="${CENV_USER_MNT}/.local/bin:"
         fi
 
         export debian_chroot="${CENV_NAME}"
