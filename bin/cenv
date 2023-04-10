@@ -336,15 +336,19 @@ else
             EXTRA_OPTS="${CENV_SINGULARITY_OPTS}"
         fi
 
-        if [ "${CENV_GPUS}" != "none" ]; then
-            if (command -v nvidia-smi > /dev/null); then
-                # echo "DEBUG: NVIDIA drivers available, adding singularity option \"--nv\"" >&2
-                EXTRA_OPTS="${EXTRA_OPTS} --nv"
-            fi
-            if [ -d "/etc/OpenCL/vendors" ]; then
-                # echo "DEBUG: OpenCL available, mounting vendors directory" >&2
-                EXTRA_OPTS="${EXTRA_OPTS} -B /etc/OpenCL/vendors"
-            fi
+        # GPU support:
+        CENV_GPU="${CENV_GPU:-$CENV_GPUS}" # Backward compatibility
+        if test -z "$CENV_GPU" -o "$CENV_GPU" = "cuda" && (command -v nvidia-smi > /dev/null); then
+            echo "INFO: NVIDIA CUDA drivers available, enabeling Apptainer CUDA support" >&2
+            EXTRA_OPTS="${EXTRA_OPTS} --nv"
+        elif test -z "$CENV_GPU" -o "$CENV_GPU" = "rocm" && (command -v rocminfo > /dev/null); then
+            # "--nv" and "--rocm" can't be used together
+            echo "INFO: AMD ROCm drivers available, enabeling Apptainer ROCm support" >&2
+            EXTRA_OPTS="${EXTRA_OPTS} --rocm"
+        elif test "$CENV_GPU" = "opencl" && test -d "/etc/OpenCL/vendors"; then
+            # Only mount OpenCL on request
+            echo "INFO: OpenCL available, mounting vendors directory" >&2
+            EXTRA_OPTS="${EXTRA_OPTS} -B /etc/OpenCL/vendors"
         fi
 
         if [[ "$XDG_RUNTIME_DIR" == /run/* ]] ; then
