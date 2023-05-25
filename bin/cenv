@@ -143,6 +143,12 @@ ENVIRONMENT VARIABLES
 * CENV_RUNTIME      cenv container runtime engine, either "apptainer",
                     "singularity" or "shifter" or "auto" (the default).
 
+* CENV_APPTAINER_OPTS  Additional optins to pass when running "apptainer", e.g.
+                       "-B /some/dir:/some/dir".
+
+* CENV_SHIFTER_OPTS  Additional to pass when running "shifter".
+
+
 CONFIGURATION FILES
 -------------------
 
