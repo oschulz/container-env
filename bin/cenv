@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+test -f "${HOME}/.cenvrc" && source "${HOME}/.cenvrc"
+
 legacy_default_basedir="${HOME}/.venv"
 default_basedir="${HOME}/.cenv"
 
@@ -140,6 +142,20 @@ ENVIRONMENT VARIABLES
 
 * CENV_RUNTIME      cenv container runtime engine, either "apptainer",
                     "singularity" or "shifter" or "auto" (the default).
+
+* CENV_APPTAINER_OPTS  Additional optins to pass when running "apptainer", e.g.
+                       "-B /some/dir:/some/dir".
+
+* CENV_SHIFTER_OPTS  Additional to pass when running "shifter".
+
+
+CONFIGURATION FILES
+-------------------
+
+* "\$HOME/.cenvrc"  If present, ${PROG_NAME} will "source" this (bash
+  compatible) shell script before doing anything else. It's a convenient
+  place to set environment variables like CENV_BASE_DIR,
+  CENV_APPTAINER_OPTS, etc.
 EOF
 } # swmod_list_usage()
 
@@ -336,16 +352,23 @@ else
             EXTRA_OPTS="${CENV_SINGULARITY_OPTS}"
         fi
 
-        if (command -v nvidia-smi > /dev/null); then
-            # echo "DEBUG: NVIDIA drivers available, adding singularity option \"--nv\"" >&2
+        # GPU support:
+        CENV_GPU="${CENV_GPU:-$CENV_GPUS}" # Backward compatibility
+        if test -z "$CENV_GPU" -o "$CENV_GPU" = "cuda" && (command -v nvidia-smi > /dev/null); then
+            echo "INFO: NVIDIA CUDA drivers available, enabeling Apptainer CUDA support" >&2
             EXTRA_OPTS="${EXTRA_OPTS} --nv"
+        elif test -z "$CENV_GPU" -o "$CENV_GPU" = "rocm" && (command -v rocminfo > /dev/null); then
+            # "--nv" and "--rocm" can't be used together
+            echo "INFO: AMD ROCm drivers available, enabeling Apptainer ROCm support" >&2
+            EXTRA_OPTS="${EXTRA_OPTS} --rocm"
+        elif test "$CENV_GPU" = "opencl" && test -d "/etc/OpenCL/vendors"; then
+            # Only mount OpenCL on request
+            echo "INFO: OpenCL available, mounting vendors directory" >&2
+            EXTRA_OPTS="${EXTRA_OPTS} -B /etc/OpenCL/vendors"
         fi
+
         if [[ "$XDG_RUNTIME_DIR" == /run/* ]] ; then
             EXTRA_OPTS="${EXTRA_OPTS} -B $XDG_RUNTIME_DIR"
-        fi
-        if [ -d "/etc/OpenCL/vendors" ]; then
-            # echo "DEBUG: OpenCL available, mounting vendors directory" >&2
-            EXTRA_OPTS="${EXTRA_OPTS} -B /etc/OpenCL/vendors"
         fi
 
         # echo "DEBUG: CENV_DIR=\"${CENV_DIR}\"" >&2
@@ -367,11 +390,11 @@ else
             export APPTAINERENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
             export APPTAINER_SHELL="${APPTAINER_SHELL:-${SHELL}}"
             # Add user bin dir to path:
-            export APPTAINERENV_APPEND_PATH="${CENV_USER_MNT}/.local/bin:"
+            export APPTAINERENV_PREPEND_PATH="${CENV_USER_MNT}/.local/bin:"
         else
             export SINGULARITYENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
             export SINGULARITY_SHELL="${SINGULARITY_SHELL:-${SHELL}}"
-            export SINGULARITYENV_APPEND_PATH="${CENV_USER_MNT}/.local/bin:"
+            export SINGULARITYENV_PREPEND_PATH="${CENV_USER_MNT}/.local/bin:"
         fi
 
         export debian_chroot="${CENV_NAME}"
