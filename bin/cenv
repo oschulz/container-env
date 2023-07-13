@@ -364,12 +364,12 @@ else
         export SWMOD_MODPATH="${SWMOD_INST_BASE}"
 
         if [ "${CENV_RUNTIME}" = "apptainer" ]; then
-            export APPTAINERENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\]\e[m cenv] \w > "
+            export APPTAINERENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
             export APPTAINER_SHELL="${APPTAINER_SHELL:-${SHELL}}"
             # Add user bin dir to path:
             export APPTAINERENV_APPEND_PATH="${CENV_USER_MNT}/.local/bin:"
         else
-            export SINGULARITYENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\]\e[m cenv] \w > "
+            export SINGULARITYENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
             export SINGULARITY_SHELL="${SINGULARITY_SHELL:-${SHELL}}"
             export SINGULARITYENV_APPEND_PATH="${CENV_USER_MNT}/.local/bin:"
         fi
@@ -407,7 +407,7 @@ else
         CENV_USER_DIR="${parent_dir}/${subst_userdir}"
         mkdir -p "${CENV_USER_DIR}"
 
-        export PS1="($CENV_NAME)\u@\h:\w>"
+        export PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
 
         if [ "${CENV_USER_MNT}" != "${CENV_USER_DIR}" ] ; then
             exec shifter --image="${img_name}" \
