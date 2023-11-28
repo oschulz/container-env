@@ -367,7 +367,7 @@ else
             EXTRA_OPTS="${EXTRA_OPTS} -B /etc/OpenCL/vendors"
         fi
 
-        if [[ "$XDG_RUNTIME_DIR" == /run/* ]] ; then
+        if [[ "$XDG_RUNTIME_DIR" == /run/* ]] && [[ -d "$XDG_RUNTIME_DIR" ]]; then
             EXTRA_OPTS="${EXTRA_OPTS} -B $XDG_RUNTIME_DIR"
         fi
 
