@@ -12,6 +12,7 @@ fi
 export CENV_BASE_DIR="${CENV_BASE_DIR:-${VENV_BASE_DIR:-${default_basedir}}}"
 export CENV_USER_MNT="${CENV_USER_MNT:-${VENV_USER_MNT:-/user}}"
 export CENV_HOME_MNT="${CENV_HOME_MNT:-${VENV_HOME_MNT:-/homedir}}"
+export CENV_VSCS_MNT="${CENV_VSCS_MNT:-${VENV_HOME_MNT:-${HOME}/.vscode-server}}"
 
 if [ "${CENV_BASE_DIR}" = "${legacy_default_basedir}" ]; then
     echo "WARNING: Defaulting to legacy CENV_BASE_DIR=\"\${HOME}/.venv\", please rename \"\${HOME}/.venv\" to \"\${HOME}/.cenv\". Support for \"\${HOME}/.venv\" will be removed in the future!" >&2
@@ -140,6 +141,10 @@ ENVIRONMENT VARIABLES
                     still (depeding on Singularity configuration) be available
                     under it's original path as well.
 
+* CENV_VSCS_MNT     Site-independent mount point in container instance for
+                    "\${CENV_USER_MNT}/.vscode-server". Defaults to
+                    "\${HOME}/.vscode-server".
+
 * CENV_RUNTIME      cenv container runtime engine, either "apptainer",
                     "singularity" or "shifter" or "auto" (the default).
 
@@ -244,14 +249,10 @@ cenv_create() {
         else
             echo "INFO: Command \"symlinks\" not available, using absolute symlink for \"${IMG_LINK_PATH}\"." >&2
         fi
-
-        mkdir -p "${CENV_DIR}/user"
     elif [ "${CENV_RUNTIME}" = "shifter" ] ; then
         mkdir -p "${CENV_DIR}"
         IMG_LINKFILE="${CENV_DIR}/rootfs.shifter"
         echo "${CENV_IMG}" > "${IMG_LINKFILE}"
-
-        # mkdir -p "${CENV_DIR}/user"
     else
         echo "ERROR: cenv internal error." >&2; exit 1
     fi
@@ -341,6 +342,7 @@ else
 
         CENV_USER_DIR="${CENV_DIR}/user"
         mkdir -p "${CENV_USER_DIR}"
+        mkdir -p "${CENV_USER_DIR}/.vscode-server"
 
         if [ "${CENV_USER_MNT}" == "none" ] ; then
             CENV_USER_MNT="${CENV_USER_DIR}"
@@ -403,6 +405,7 @@ else
             exec "${CENV_RUNTIME}" "${CMD}" ${EXTRA_OPTS} \
                 -B "${CENV_USER_DIR}:${CENV_USER_MNT}" \
                 -B "${HOME}:${CENV_HOME_MNT}" \
+                -B "${CENV_USER_DIR}/.vscode-server:${CENV_VSCS_MNT}" \
                 "${FS_IMG}" "$@"
         else
             exec "${CENV_RUNTIME}" "${CMD}" ${EXTRA_OPTS} \
@@ -429,12 +432,13 @@ else
         fi
         CENV_USER_DIR="${parent_dir}/${subst_userdir}"
         mkdir -p "${CENV_USER_DIR}"
+        mkdir -p "${CENV_USER_DIR}/.vscode-server"
 
         export PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
 
         if [ "${CENV_USER_MNT}" != "${CENV_USER_DIR}" ] ; then
             exec shifter --image="${img_name}" \
-                --volume="${CENV_USER_DIR}:${CENV_USER_MNT};${HOME}:${CENV_HOME_MNT}" \
+                --volume="${CENV_USER_DIR}:${CENV_USER_MNT};${HOME}:${CENV_HOME_MNT};${CENV_USER_DIR}/.vscode-server:${CENV_VSCS_MNT}" \
                  ${EXTRA_OPTS} -- "$@"
         else
             exec shifter --image="${img_name}" \

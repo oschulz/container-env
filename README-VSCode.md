@@ -44,7 +44,9 @@ In your VS-Code settings *on your local system*, set
 "remote.SSH.enableRemoteCommand": true
 ```
 
-### Step 4
+### Step 4 (Shifter-only)
+
+This step is optional if you use Apptainer, it is only required with Shifter as the container runtime.
 
 Since VS-Code reuses remote server instances, the above is not sufficient to run multiple container images on the same
 remote host at the same time. To get *separate* (per container image) VS-Code server instances on the *same host*, add
@@ -58,6 +60,8 @@ something like this to your VS-Code settings *on your local system*:
   "othercenv~otherhost": "~/.vscode-container/othercenv"
 }
 ```
+
+When using Apptainer, cenv will automatically try to bind-mount `/user/.vscode-server` to `$HOME/.vscode-server`, so setting `remote.SSH.serverInstallPath` in VS-Code is not required.
 
 
 ### Step 5
