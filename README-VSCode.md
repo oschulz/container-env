@@ -35,6 +35,9 @@ Host somehost mycenv~somehost othercenv~somehost
 Test whether this works by running `ssh mycenv~somehost` *on your local system*. This should drop you into an SSH
 session running inside of an instance of the `mycenv` cenv-environment on host "somehost.some.where"
 
+`cenv` will automatically try to mount `/user/.vscode-server` to `$HOME/.vscode-server` to keep VS-Code server
+instances for environments separate from each other an from non-cenv instances.
+
 
 ### Step 3
 
@@ -44,23 +47,8 @@ In your VS-Code settings *on your local system*, set
 "remote.SSH.enableRemoteCommand": true
 ```
 
+
 ### Step 4
-
-Since VS-Code reuses remote server instances, the above is not sufficient to run multiple container images on the same
-remote host at the same time. To get *separate* (per container image) VS-Code server instances on the *same host*, add
-something like this to your VS-Code settings *on your local system*:
-
-```
-"remote.SSH.serverInstallPath": {
-  "mycenv~somehost": "~/.vscode-container/mycenv",
-  "mycenv~otherhost": "~/.vscode-container/mycenv",
-  "othercenv~somehost": "~/.vscode-container/othercenv",
-  "othercenv~otherhost": "~/.vscode-container/othercenv"
-}
-```
-
-
-### Step 5
 
 Connect to `somehost` from with VS-Code *running your local system*:
 
