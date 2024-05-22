@@ -1,5 +1,10 @@
 #!/bin/bash -e
 
+find_this_cenv_command() {
+    (echo "${0}" | grep -q '^/') && echo "${0}" || (cd "`pwd`/`dirname \"${0}\"`" && echo "`pwd`/`basename ${0}`")
+}
+export CENV_BIN=`find_this_cenv_command`
+
 test -f "${HOME}/.cenvrc" && source "${HOME}/.cenvrc"
 
 legacy_default_basedir="${HOME}/.venv"
@@ -148,10 +153,18 @@ ENVIRONMENT VARIABLES
 * CENV_RUNTIME      cenv container runtime engine, either "apptainer",
                     "singularity" or "shifter" or "auto" (the default).
 
-* CENV_APPTAINER_OPTS  Additional optins to pass when running "apptainer", e.g.
+* CENV_GPU          (Apptainer-only) Select GPU backend, currently may be
+                    "cuda", "rocm", "opencl" or "none". If not set, cenv will
+                    try to autodetect the appropriate backend.
+
+* CENV_APPTAINER_OPTS  Additional options to pass when running "apptainer", e.g.
                        "-B /some/dir:/some/dir".
 
 * CENV_SHIFTER_OPTS  Additional to pass when running "shifter".
+
+cenv sets the environment variable CENV_BIN to the absolute path to cenv
+itself. This can be useful in distributed scenarios, e.g. when generating
+batch job scripts that should not rely on cenv being on PATH.
 
 
 CONFIGURATION FILES
