@@ -1,9 +1,0 @@
-#!/bin/bash -e
-
-thisdir() {
-	(echo "${0}" | grep -q '^/') && dirname "${0}" || (cd "`pwd`/`dirname \"${0}\"`" && pwd)
-}
-
-echo "WARNING: use cenv instead of venv, the venv command has been deprecated and will be removed in the future!" >&2
-
-`thisdir`/cenv "$@"
