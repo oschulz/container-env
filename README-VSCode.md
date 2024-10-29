@@ -52,16 +52,19 @@ Since VS-Code reuses remote server instances, the above is not sufficient to run
 remote host at the same time. To get *separate* (per container image) VS-Code server instances on the *same host*, add
 something like this to your VS-Code settings *on your local system*:
 
-```
+```json
 "remote.SSH.serverInstallPath": {
-  "mycenv~somehost": "~/.vscode-container/mycenv",
-  "mycenv~otherhost": "~/.vscode-container/mycenv",
-  "othercenv~somehost": "~/.vscode-container/othercenv",
-  "othercenv~otherhost": "~/.vscode-container/othercenv"
+  "mycenv~somehost": "/user",
+  "mycenv~otherhost": "/user",
+  "othercenv~somehost": "/user",
+  "othercenv~otherhost": "/user"
 }
 ```
 
-When using Apptainer, cenv will automatically try to bind-mount `/user/.vscode-server` to `$HOME/.vscode-server`, so setting `remote.SSH.serverInstallPath` in VS-Code is not required.
+This will force VS-Code to install it's server component into `/user/.vscode-server`.
+
+When using Apptainer, cenv will automatically try to bind-mount `/user/.vscode-server` to `$HOME/.vscode-server`, so
+setting `remote.SSH.serverInstallPath` in VS-Code is not required.
 
 
 ### Step 5
