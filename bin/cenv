@@ -451,7 +451,7 @@ else
 
         if [ "${CENV_USER_MNT}" != "${CENV_USER_DIR}" ] ; then
             exec shifter --image="${img_name}" \
-                --volume="${CENV_USER_DIR}:${CENV_USER_MNT};${HOME}:${CENV_HOME_MNT};${CENV_USER_DIR}/.vscode-server:${CENV_VSCS_MNT}" \
+                --volume="${CENV_USER_DIR}:${CENV_USER_MNT};${HOME}:${CENV_HOME_MNT}" \
                  ${EXTRA_OPTS} -- "$@"
         else
             exec shifter --image="${img_name}" \
