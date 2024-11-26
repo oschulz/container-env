@@ -303,6 +303,7 @@ elif [ "${CENV_NAME_ARG}" = "--create" ] ; then
     cenv_create "$@"
 else
     CENV_DIR="${CENV_BASE_DIR}/${CENV_NAME_ARG}"
+    test -f "${CENV_DIR}/.cenvrc" && source "${CENV_DIR}/.cenvrc"
 
     export CENV_NAME="${CENV_NAME_ARG}"
     # Legacy support:
