@@ -316,6 +316,7 @@ else
         source "${CENV_DIR}/cenvrc"
     elif [ -f "${CENV_DIR}/.cenvrc" ] ; then
         # For backward compatibility:
+        echo "WARNING: Use of \"${CENV_DIR}/.cenvrc\" is deprecated, please rename it to \"${CENV_DIR}/cenvrc\"." >&2
         source "${CENV_DIR}/.cenvrc"
     fi
 
