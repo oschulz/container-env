@@ -175,7 +175,7 @@ CONFIGURATION FILES
   place to set environment variables like CENV_BASE_DIR,
   CENV_APPTAINER_OPTS, etc.
 
-* "\$CENV_BASE_DIR/\$CENV_NAME/.cenvrc" Create this file after
+* "\$CENV_BASE_DIR/\$CENV_NAME/cenvrc" Create this file after
   creating the container environment to set up environment-specific options. If
   present, ${PROG_NAME} will "source" this (bash compatible) shell script
   before invoking the container runtime.
@@ -308,7 +308,16 @@ elif [ "${CENV_NAME_ARG}" = "--create" ] ; then
     cenv_create "$@"
 else
     CENV_DIR="${CENV_BASE_DIR}/${CENV_NAME_ARG}"
-    test -f "${CENV_DIR}/.cenvrc" && source "${CENV_DIR}/.cenvrc"
+
+    if [ -f "${CENV_DIR}/cenvrc" ] ; then
+        if [ -f "${CENV_DIR}/.cenvrc" ] ; then
+            echo "WARNING: Both \"${CENV_DIR}/cenvrc\" and \"${CENV_DIR}/.cenvrc\" exist, using \"${CENV_DIR}/cenvrc\"." >&2
+        fi
+        source "${CENV_DIR}/cenvrc"
+    elif [ -f "${CENV_DIR}/.cenvrc" ] ; then
+        # For backward compatibility:
+        source "${CENV_DIR}/.cenvrc"
+    fi
 
     export CENV_NAME="${CENV_NAME_ARG}"
     # Legacy support:
