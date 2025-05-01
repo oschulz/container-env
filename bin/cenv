@@ -154,8 +154,9 @@ ENVIRONMENT VARIABLES
                     "singularity" or "shifter" or "auto" (the default).
 
 * CENV_GPU          (Apptainer-only) Select GPU backend, currently may be
-                    "cuda", "rocm", "opencl" or "none". If not set, cenv will
-                    try to autodetect the appropriate backend.
+                    "cuda", "rocm", "opencl", a comma-separated list of those,
+                    or "none". If not set or empty, cenv will try to
+                    autodetect the available backend(s).
 
 * CENV_APPTAINER_OPTS  Additional options to pass when running "apptainer", e.g.
                        "-B /some/dir:/some/dir".
@@ -385,17 +386,56 @@ else
 
         # GPU support:
         CENV_GPU="${CENV_GPU:-$CENV_GPUS}" # Backward compatibility
-        if test -z "$CENV_GPU" -o "$CENV_GPU" = "cuda" && (command -v nvidia-smi > /dev/null); then
-            echo "INFO: NVIDIA CUDA drivers available, enabeling Apptainer CUDA support" >&2
-            EXTRA_OPTS="${EXTRA_OPTS} --nv"
-        elif test -z "$CENV_GPU" -o "$CENV_GPU" = "rocm" && (command -v rocminfo > /dev/null); then
-            # "--nv" and "--rocm" can't be used together
-            echo "INFO: AMD ROCm drivers available, enabeling Apptainer ROCm support" >&2
-            EXTRA_OPTS="${EXTRA_OPTS} --rocm"
-        elif test "$CENV_GPU" = "opencl" && test -d "/etc/OpenCL/vendors"; then
-            # Only mount OpenCL on request
-            echo "INFO: OpenCL available, mounting vendors directory" >&2
-            EXTRA_OPTS="${EXTRA_OPTS} -B /etc/OpenCL/vendors"
+        # GPU detection and support
+        if [ -z "$CENV_GPU" ] ; then
+            # auto-detect available GPU backends
+            _gpus=()
+            if command -v nvidia-smi >/dev/null 2>&1 ; then
+                _gpus+=("cuda")
+            fi
+            if command -v rocminfo >/dev/null 2>&1 ; then
+                _gpus+=("rocm")
+            fi
+            # only add opencl if neither cuda nor rocm was found
+            if [ ${#_gpus[@]} -eq 0 ] && [ -d "/etc/OpenCL/vendors" ] ; then
+                _gpus+=("opencl")
+            fi
+            if [ ${#_gpus[@]} -gt 0 ] ; then
+                export CENV_GPU="$(IFS=,; echo "${_gpus[*]}")"
+                # echo "DEBUG: Detected GPU support: ${CENV_GPU}" >&2
+            fi
+        fi
+
+        # enable selected GPU backends
+        if [ -n "$CENV_GPU" ] ; then
+            # split on commas, ignore empty tokens and trim whitespace
+            IFS=',' read -ra _gpu_backends <<< "$CENV_GPU"
+            unset IFS
+            for _g in "${_gpu_backends[@]}"; do
+            # trim leading/trailing whitespace
+            _g="${_g#"${_g%%[![:space:]]*}"}"
+            _g="${_g%"${_g##*[![:space:]]}"}"
+            [ -z "$_g" ] && continue
+            case "$_g" in
+                none)
+                ;;
+                cuda)
+                echo "INFO: Enabling ${CENV_RUNTIME} CUDA support" >&2
+                EXTRA_OPTS="${EXTRA_OPTS} --nv"
+                ;;
+                rocm)
+                echo "INFO: Enabling ${CENV_RUNTIME} ROCm support" >&2
+                EXTRA_OPTS="${EXTRA_OPTS} --rocm"
+                ;;
+                opencl)
+                echo "INFO: Mounting OpenCL vendors directory" >&2
+                EXTRA_OPTS="${EXTRA_OPTS} -B /etc/OpenCL/vendors"
+                ;;
+                *)
+                echo "WARNING: Unknown GPU backend '$_g', ignoring" >&2
+                ;;
+            esac
+            done
         fi
 
         if [[ "$XDG_RUNTIME_DIR" == /run/* ]] && [[ -d "$XDG_RUNTIME_DIR" ]]; then
