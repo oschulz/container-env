@@ -461,11 +461,12 @@ else
             export APPTAINERENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
             export APPTAINER_SHELL="${APPTAINER_SHELL:-${SHELL}}"
             # Add user bin dir to path:
-            export APPTAINERENV_PREPEND_PATH="${CENV_USER_MNT}/.local/bin:"
+            export APPTAINERENV_PREPEND_PATH="${CENV_USER_MNT}/.local/bin:${CENV_USER_MNT}/.julia/bin"
         else
             export SINGULARITYENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
             export SINGULARITY_SHELL="${SINGULARITY_SHELL:-${SHELL}}"
-            export SINGULARITYENV_PREPEND_PATH="${CENV_USER_MNT}/.local/bin:"
+            # Add user bin dir to path:
+            export SINGULARITYENV_PREPEND_PATH="${CENV_USER_MNT}/.local/bin:${CENV_USER_MNT}/.julia/bin"
         fi
 
         export debian_chroot="${CENV_NAME}"
