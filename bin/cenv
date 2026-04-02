@@ -361,6 +361,10 @@ else
     export JULIA_DEPOT_PATH="${CENV_USER_MNT}/.julia:"
     export JULIA_PKG_DEVDIR="${CENV_USER_MNT}/.julia/dev"
 
+    # Special exports for Rust:
+    export CARGO_HOME="${CENV_USER_MNT}/.cargo"
+    export RUSTUP_HOME="${CENV_USER_MNT}/.rustup"
+
     set_cenv_runtime
     if [ "${CENV_RUNTIME}" = "apptainer" ] ||
        [ "${CENV_RUNTIME}" = "singularity" ]; then
@@ -477,12 +481,12 @@ else
             export APPTAINERENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
             export APPTAINER_SHELL="${APPTAINER_SHELL:-${SHELL}}"
             # Add user bin dir to path:
-            export APPTAINERENV_PREPEND_PATH="${CENV_USER_MNT}/.local/bin:${CENV_USER_MNT}/.julia/bin"
+            export APPTAINERENV_PREPEND_PATH="${CENV_USER_MNT}/.local/bin:${CENV_USER_MNT}/.julia/bin:${CENV_USER_MNT}/.cargo/bin"
         else
             export SINGULARITYENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
             export SINGULARITY_SHELL="${SINGULARITY_SHELL:-${SHELL}}"
             # Add user bin dir to path:
-            export SINGULARITYENV_PREPEND_PATH="${CENV_USER_MNT}/.local/bin:${CENV_USER_MNT}/.julia/bin"
+            export SINGULARITYENV_PREPEND_PATH="${CENV_USER_MNT}/.local/bin:${CENV_USER_MNT}/.julia/bin:${CENV_USER_MNT}/.cargo/bin"
         fi
 
         export debian_chroot="${CENV_NAME}"
