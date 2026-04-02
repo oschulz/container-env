@@ -15,9 +15,6 @@ if [ -e "${legacy_default_basedir}" -a ! -e "${default_basedir}" ]; then
 fi
 
 export CENV_BASE_DIR="${CENV_BASE_DIR:-${VENV_BASE_DIR:-${default_basedir}}}"
-export CENV_USER_MNT="${CENV_USER_MNT:-${VENV_USER_MNT:-/user}}"
-export CENV_HOME_MNT="${CENV_HOME_MNT:-${VENV_HOME_MNT:-/homedir}}"
-export CENV_VSCS_MNT="${CENV_VSCS_MNT:-${VENV_HOME_MNT:-${HOME}/.vscode-server}}"
 
 if [ "${CENV_BASE_DIR}" = "${legacy_default_basedir}" ]; then
     echo "WARNING: Defaulting to legacy CENV_BASE_DIR=\"\${HOME}/.venv\", please rename \"\${HOME}/.venv\" to \"\${HOME}/.cenv\". Support for \"\${HOME}/.venv\" will be removed in the future!" >&2
@@ -140,6 +137,9 @@ ENVIRONMENT VARIABLES
 * CENV_USER_MNT     Site-independent mount point in container instance for
                     "user"-directory (located inside virtual environment
                     directory). Defaults to "/user".
+
+* CENV_HOME_DIR     Host directory to use/mount as the home directory inside the
+                    container. Defaults to "\${HOME}".
 
 * CENV_HOME_MNT     Site-independent mount point in container instance for
                     "\${HOME}". Defaults to "/homedir". "${HOME}" itself will
@@ -321,6 +321,15 @@ else
         source "${CENV_DIR}/.cenvrc"
     fi
 
+    export CENV_USER_MNT="${CENV_USER_MNT:-${VENV_USER_MNT:-/user}}"
+    export CENV_HOME_DIR="${CENV_HOME_DIR:-${VENV_HOME_DIR:-${HOME}}}"
+    export CENV_HOME_MNT="${CENV_HOME_MNT:-${VENV_HOME_MNT:-/homedir}}"
+    export CENV_VSCS_MNT="${CENV_VSCS_MNT:-${VENV_HOME_MNT:-${HOME}/.vscode-server}}"
+
+    if [ "${CENV_HOME_DIR}" != "${HOME}" ]; then
+        mkdir -p "${CENV_HOME_DIR}"
+    fi
+
     export CENV_NAME="${CENV_NAME_ARG}"
     # Legacy support:
     export VENV_NAME="${CENV_NAME_ARG}"
@@ -458,6 +467,9 @@ else
         export SWMOD_MODPATH="${SWMOD_INST_BASE}"
 
         if [ "${CENV_RUNTIME}" = "apptainer" ]; then
+            if [ "${CENV_HOME_DIR}" != "${HOME}" ]; then
+                export APPTAINER_HOME="${CENV_HOME_DIR}"
+            fi
             export APPTAINERENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
             export APPTAINER_SHELL="${APPTAINER_SHELL:-${SHELL}}"
             # Add user bin dir to path:
@@ -474,7 +486,7 @@ else
         if [ "${CENV_USER_MNT}" != "${CENV_USER_DIR}" ] ; then
             exec "${CENV_RUNTIME}" "${CMD}" ${EXTRA_OPTS} \
                 -B "${CENV_USER_DIR}:${CENV_USER_MNT}" \
-                -B "${HOME}:${CENV_HOME_MNT}" \
+                -B "${CENV_HOME_DIR}:${CENV_HOME_MNT}" \
                 -B "${CENV_USER_DIR}/.vscode-server:${CENV_VSCS_MNT}" \
                 "${FS_IMG}" "$@"
         else
@@ -504,11 +516,15 @@ else
         mkdir -p "${CENV_USER_DIR}"
         mkdir -p "${CENV_USER_DIR}/.vscode-server"
 
+        if [ "${CENV_HOME_DIR}" != "${HOME}" ]; then
+            export HOME="${CENV_HOME_DIR}"
+        fi
+
         export PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
 
         if [ "${CENV_USER_MNT}" != "${CENV_USER_DIR}" ] ; then
             exec shifter --image="${img_name}" \
-                --volume="${CENV_USER_DIR}:${CENV_USER_MNT};${HOME}:${CENV_HOME_MNT}" \
+                --volume="${CENV_USER_DIR}:${CENV_USER_MNT};${CENV_HOME_DIR}:${CENV_HOME_MNT}" \
                  ${EXTRA_OPTS} -- "$@"
         else
             exec shifter --image="${img_name}" \
