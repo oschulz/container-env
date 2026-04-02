@@ -134,9 +134,13 @@ ENVIRONMENT VARIABLES
 * CENV_BASE_DIR     Base path for virtual environment directories. Defaults
                     to "\${HOME}/.cenv".
 
-* CENV_USER_MNT     Site-independent mount point in container instance for
-                    "user"-directory (located inside virtual environment
-                    directory). Defaults to "/user".
+* CENV_USER_DIR     Host directory used as the "user"-directory for storing
+                    user-specific data. Defaults to
+                    "\${CENV_BASE_DIR}/\${CENV_NAME}/user"
+                     (located inside virtual environment directory).
+
+* CENV_USER_MNT     Site-independent mount point for "\${CENV_USER_DIR}" in
+                    container instance for "user"-directory. Defaults to "/user".
 
 * CENV_HOME_DIR     Host directory to use/mount as the home directory inside the
                     container. Defaults to "\${HOME}".
@@ -379,7 +383,7 @@ else
             exit 1
         fi
 
-        CENV_USER_DIR="${CENV_DIR}/user"
+        CENV_USER_DIR="${CENV_USER_DIR:-${CENV_DIR}/user}"
         mkdir -p "${CENV_USER_DIR}"
         mkdir -p "${CENV_USER_DIR}/.vscode-server"
 
@@ -512,7 +516,7 @@ else
         if [ ! -e "${CENV_DIR}/user" ] ; then
             ln -s "../../${subst_userdir}" "${CENV_DIR}/user"
         fi
-        CENV_USER_DIR="${parent_dir}/${subst_userdir}"
+        CENV_USER_DIR="${CENV_USER_DIR:-${parent_dir}/${subst_userdir}}"
         mkdir -p "${CENV_USER_DIR}"
         mkdir -p "${CENV_USER_DIR}/.vscode-server"
 
