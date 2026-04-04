@@ -476,7 +476,7 @@ else
 
         if [ "${CENV_RUNTIME}" = "apptainer" ]; then
             if [ "${CENV_HOME_DIR}" != "${HOME}" ]; then
-                export APPTAINER_HOME="${CENV_HOME_DIR}"
+                export APPTAINER_HOME="${CENV_HOME_MNT}"
             fi
             export APPTAINERENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
             export APPTAINER_SHELL="${APPTAINER_SHELL:-${SHELL}}"
