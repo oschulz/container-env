@@ -349,6 +349,10 @@ else
     # Special exports for Python:
     export PYTHONUSERBASE="${CENV_USER_MNT}/.local"
 
+    # Special exports for Pixi/rattler:
+    export PIXI_CACHE_DIR="${CENV_USER_MNT}/.cache/rattler"
+    export RATTLER_CACHE_DIR="${CENV_USER_MNT}/.cache/rattler"
+
     # Special exports for Jupyter:
     export JUPYTER_CONFIG_DIR="${CENV_USER_MNT}/.jupyter"
     export JUPYTER_DATA_DIR="${CENV_USER_MNT}/.local/share/jupyter"
