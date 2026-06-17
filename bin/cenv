@@ -348,14 +348,30 @@ else
 
     # Special exports for Python:
     export PYTHONUSERBASE="${CENV_USER_MNT}/.local"
+    export PIP_CACHE_DIR="${CENV_USER_MNT}/.cache/pip"
 
     # Special exports for Pixi/rattler:
     export PIXI_CACHE_DIR="${CENV_USER_MNT}/.cache/rattler"
     export RATTLER_CACHE_DIR="${CENV_USER_MNT}/.cache/rattler"
 
+    # Special exports for Python JIT/compilation caches:
+    export NUMBA_CACHE_DIR="${CENV_USER_MNT}/.cache/numba"
+    export CUPY_CACHE_DIR="${CENV_USER_MNT}/.cache/cupy"
+    export TRITON_CACHE_DIR="${CENV_USER_MNT}/.cache/triton"
+
+    # Special exports for matplotlib:
+    export MPLCONFIGDIR="${CENV_USER_MNT}/.config/matplotlib"
+
+    # Special exports for machine-learning model caches:
+    export HF_HOME="${CENV_USER_MNT}/.cache/huggingface"
+    export TORCH_HOME="${CENV_USER_MNT}/.cache/torch"
+
     # Special exports for Jupyter:
     export JUPYTER_CONFIG_DIR="${CENV_USER_MNT}/.jupyter"
     export JUPYTER_DATA_DIR="${CENV_USER_MNT}/.local/share/jupyter"
+
+    # Special exports for IPython:
+    export IPYTHONDIR="${CENV_USER_MNT}/.ipython"
 
     # Special exports for GitHub Atom:
     export ATOM_HOME="${CENV_USER_MNT}/.atom"
@@ -364,6 +380,11 @@ else
     export JULIA_PKGDIR="${CENV_USER_MNT}/.julia"
     export JULIA_DEPOT_PATH="${CENV_USER_MNT}/.julia:"
     export JULIA_PKG_DEVDIR="${CENV_USER_MNT}/.julia/dev"
+
+    # Special exports for Node.js:
+    export NPM_CONFIG_CACHE="${CENV_USER_MNT}/.cache/npm"
+    export npm_config_devdir="${CENV_USER_MNT}/.cache/node-gyp"
+    export NODE_REPL_HISTORY="${CENV_USER_MNT}/.node_repl_history"
 
     # Special exports for Rust:
     export CARGO_HOME="${CENV_USER_MNT}/.cargo"
