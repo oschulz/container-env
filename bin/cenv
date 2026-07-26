@@ -131,6 +131,9 @@ ${PROG_NAME} - virtual enviroment management
     ${PROG_NAME} --create CENV_NAME APPTAINER_IMAGE.sif
     ${PROG_NAME} --create CENV_NAME SINGULARITY_IMAGE.sif
     ${PROG_NAME} --create CENV_NAME DOCKER_IMAGE
+    ${PROG_NAME} --instance CENV_NAME/SESSION_NAME [shell|program [...]]
+    ${PROG_NAME} --instances [CENV_NAME]
+    ${PROG_NAME} --stop CENV_NAME/SESSION_NAME
 
 Use and manage virtual environments based on Apptainer (https://apptainer.org)
 Singularity (https://sylabs.io) or Shifter
@@ -163,6 +166,42 @@ image "Apptainer_IMAGE[.sif]".
 Create a virtual enviroment named \`CENV_NAME\` inside
 "\$CENV_BASE_DIR/CENV_NAME" and associate it with \`DOCKER_IMAGE\` for use
 with Shifter.
+
+
+CONTAINER INSTANCES
+-------------------
+
+Long-running container instances allow for running several shells and
+programs in the same container at the same time. They share the mount, PID
+and IPC namespaces of the instance, so they can see and talk to each other
+(e.g. an interactive shell, a VS Code tunnel server and an AI coding agent).
+This is especially useful on remote and batch nodes.
+
+Container instances require Apptainer or Singularity, they are not available
+with Shifter.
+
+    ${PROG_NAME} --instance CENV_NAME/SESSION_NAME
+    ${PROG_NAME} --instance CENV_NAME/SESSION_NAME shell
+    ${PROG_NAME} --instance CENV_NAME/SESSION_NAME PROGRAM [ARG...]
+
+Run a shell or a program in the container instance \`SESSION_NAME\` of the
+virtual environment \`CENV_NAME\`. The instance is started if it is not
+running yet, so this can be used both to create instances and to connect to
+them. \`SESSION_NAME\` may contain letters, digits, "_" and "-".
+
+Note that container image, bind mounts and other container options are fixed
+when an instance starts. Changes to the configuration of an environment only
+take effect for instances started afterwards.
+
+    ${PROG_NAME} --instances [CENV_NAME]
+
+List the running container instances as "CENV_NAME/SESSION_NAME", either of
+all virtual environments or only of the environment \`CENV_NAME\`.
+
+    ${PROG_NAME} --stop CENV_NAME/SESSION_NAME
+
+Stop the container instance \`SESSION_NAME\` of the virtual environment
+\`CENV_NAME\`. This terminates all processes running in the instance.
 
 
 ENVIRONMENT VARIABLES
@@ -201,6 +240,8 @@ ENVIRONMENT VARIABLES
 
 * CENV_APPTAINER_OPTS  Additional options to pass when running "apptainer", e.g.
                        "-B /some/dir:/some/dir".
+
+* CENV_SINGULARITY_OPTS  Additional options to pass when running "singularity".
 
 * CENV_SHIFTER_OPTS  Additional to pass when running "shifter".
 
@@ -354,6 +395,411 @@ cenv_create() {
 }
 
 
+# Redirects the per-user directories of various languages and tools into the
+# "user"-directory of the container environment, so that they are persistent
+# but separate for each environment:
+cenv_setup_tool_env_vars() {
+    # Special exports for Python:
+    export PYTHONUSERBASE="${CENV_USER_MNT}/.local"
+    export PIP_CACHE_DIR="${CENV_USER_MNT}/.cache/pip"
+
+    # Special exports for Pixi/rattler:
+    export PIXI_CACHE_DIR="${CENV_USER_MNT}/.cache/rattler"
+    export RATTLER_CACHE_DIR="${CENV_USER_MNT}/.cache/rattler"
+
+    # Special exports for machine-learning model caches:
+    export HF_HOME="${CENV_USER_MNT}/.cache/huggingface"
+    export TORCH_HOME="${CENV_USER_MNT}/.cache/torch"
+
+    # Special exports for Python JIT/compilation caches:
+    export NUMBA_CACHE_DIR="${CENV_USER_MNT}/.cache/numba"
+    export CUPY_CACHE_DIR="${CENV_USER_MNT}/.cache/cupy"
+    export TRITON_CACHE_DIR="${CENV_USER_MNT}/.cache/triton"
+
+    # Special exports for matplotlib:
+    export MPLCONFIGDIR="${CENV_USER_MNT}/.config/matplotlib"
+
+    # Special exports for Jupyter:
+    export JUPYTER_CONFIG_DIR="${CENV_USER_MNT}/.jupyter"
+    export JUPYTER_DATA_DIR="${CENV_USER_MNT}/.local/share/jupyter"
+
+    # Special exports for IPython:
+    export IPYTHONDIR="${CENV_USER_MNT}/.ipython"
+
+    # Special exports for GitHub Atom:
+    export ATOM_HOME="${CENV_USER_MNT}/.atom"
+
+    # Special exports for Julia:
+    export JULIA_PKGDIR="${CENV_USER_MNT}/.julia"
+    export JULIA_DEPOT_PATH="${CENV_USER_MNT}/.julia:"
+    export JULIA_PKG_DEVDIR="${CENV_USER_MNT}/.julia/dev"
+
+    # Special exports for Rust:
+    export CARGO_HOME="${CENV_USER_MNT}/.cargo"
+    export RUSTUP_HOME="${CENV_USER_MNT}/.rustup"
+
+    # Special exports for Node.js:
+    export NPM_CONFIG_CACHE="${CENV_USER_MNT}/.cache/npm"
+    export npm_config_devdir="${CENV_USER_MNT}/.cache/node-gyp"
+    export NODE_REPL_HISTORY="${CENV_USER_MNT}/.node_repl_history"
+}
+
+
+# Prepares the use of the container environment "$1": Sets CENV_DIR, sources
+# the environment's "cenvrc", sets the cenv environment variables and selects
+# the container runtime engine:
+cenv_setup() {
+    local cenv_name="$1"
+
+    CENV_DIR="${CENV_BASE_DIR}/${cenv_name}"
+
+    if [ -f "${CENV_DIR}/cenvrc" ] ; then
+        if [ -f "${CENV_DIR}/.cenvrc" ] ; then
+            echo "WARNING: Both \"${CENV_DIR}/cenvrc\" and \"${CENV_DIR}/.cenvrc\" exist, using \"${CENV_DIR}/cenvrc\"." >&2
+        fi
+        source "${CENV_DIR}/cenvrc"
+    elif [ -f "${CENV_DIR}/.cenvrc" ] ; then
+        # For backward compatibility:
+        echo "WARNING: Use of \"${CENV_DIR}/.cenvrc\" is deprecated, please rename it to \"${CENV_DIR}/cenvrc\"." >&2
+        source "${CENV_DIR}/.cenvrc"
+    fi
+
+    export CENV_USER_MNT="${CENV_USER_MNT:-${VENV_USER_MNT:-/user}}"
+    export CENV_HOME_DIR="${CENV_HOME_DIR:-${VENV_HOME_DIR:-${HOME}}}"
+    export CENV_HOME_MNT="${CENV_HOME_MNT:-${VENV_HOME_MNT:-/homedir}}"
+    export CENV_VSCS_MNT="${CENV_VSCS_MNT:-${VENV_HOME_MNT:-${HOME}/.vscode-server}}"
+
+    if [ "${CENV_HOME_DIR}" != "${HOME}" ]; then
+        mkdir -p "${CENV_HOME_DIR}"
+    fi
+
+    export CENV_NAME="${cenv_name}"
+    # Legacy support:
+    export VENV_NAME="${cenv_name}"
+
+    cenv_setup_tool_env_vars
+
+    set_cenv_runtime
+}
+
+
+# Prepares running the container environment set up by cenv_setup with
+# Apptainer or Singularity: Sets FS_IMG, CENV_USER_DIR, EXTRA_OPTS and the
+# bind-mount options CENV_BIND_OPTS, and exports the environment variables to
+# be passed into the container:
+cenv_setup_apptainer() {
+    if [ ! -d "${CENV_DIR}" ]; then
+        echo "ERROR: cenv directory \"${CENV_DIR}\" doesn't exist." >&2
+        exit 1
+    fi
+
+    FS_IMG=`find_cenv_rootfs "${CENV_DIR}"` || {
+        echo "ERROR: No rootfs found in \"${CENV_DIR}\", neither for architecture \"${CENV_ARCH}\" nor architecture-independent." >&2
+        exit 1
+    }
+
+    CENV_USER_DIR="${CENV_USER_DIR:-${CENV_DIR}/user}"
+    mkdir -p "${CENV_USER_DIR}"
+    mkdir -p "${CENV_USER_DIR}/.vscode-server"
+
+    if [ "${CENV_USER_MNT}" == "none" ] ; then
+        CENV_USER_MNT="${CENV_USER_DIR}"
+        # The tool paths were derived from the placeholder "none", redo them
+        # with the actual location of the "user"-directory:
+        cenv_setup_tool_env_vars
+    fi
+
+    if [ "${CENV_RUNTIME}" = "apptainer" ]; then
+        EXTRA_OPTS="${CENV_APPTAINER_OPTS}"
+    else
+        EXTRA_OPTS="${CENV_SINGULARITY_OPTS}"
+    fi
+
+    # GPU support:
+    CENV_GPU="${CENV_GPU:-$CENV_GPUS}" # Backward compatibility
+    # GPU detection and support
+    if [ -z "$CENV_GPU" ] ; then
+        # auto-detect available GPU backends
+        local _gpus=()
+        if command -v nvidia-smi >/dev/null 2>&1 ; then
+            _gpus+=("cuda")
+        fi
+        if command -v rocminfo >/dev/null 2>&1 ; then
+            _gpus+=("rocm")
+        fi
+        # only add opencl if neither cuda nor rocm was found
+        if [ ${#_gpus[@]} -eq 0 ] && [ -d "/etc/OpenCL/vendors" ] ; then
+            _gpus+=("opencl")
+        fi
+        if [ ${#_gpus[@]} -gt 0 ] ; then
+            export CENV_GPU="$(IFS=,; echo "${_gpus[*]}")"
+            # echo "DEBUG: Detected GPU support: ${CENV_GPU}" >&2
+        fi
+    fi
+
+    # enable selected GPU backends
+    if [ -n "$CENV_GPU" ] ; then
+        # split on commas, ignore empty tokens and trim whitespace
+        local _gpu_backends _g
+        IFS=',' read -ra _gpu_backends <<< "$CENV_GPU"
+        unset IFS
+        for _g in "${_gpu_backends[@]}"; do
+        # trim leading/trailing whitespace
+        _g="${_g#"${_g%%[![:space:]]*}"}"
+        _g="${_g%"${_g##*[![:space:]]}"}"
+        [ -z "$_g" ] && continue
+        case "$_g" in
+            none)
+            ;;
+            cuda)
+            echo "INFO: Enabling ${CENV_RUNTIME} CUDA support" >&2
+            EXTRA_OPTS="${EXTRA_OPTS} --nv"
+            ;;
+            rocm)
+            echo "INFO: Enabling ${CENV_RUNTIME} ROCm support" >&2
+            EXTRA_OPTS="${EXTRA_OPTS} --rocm"
+            ;;
+            opencl)
+            echo "INFO: Mounting OpenCL vendors directory" >&2
+            EXTRA_OPTS="${EXTRA_OPTS} -B /etc/OpenCL/vendors"
+            ;;
+            *)
+            echo "WARNING: Unknown GPU backend '$_g', ignoring" >&2
+            ;;
+        esac
+        done
+    fi
+
+    if [[ "$XDG_RUNTIME_DIR" == /run/* ]] && [[ -d "$XDG_RUNTIME_DIR" ]]; then
+        EXTRA_OPTS="${EXTRA_OPTS} -B $XDG_RUNTIME_DIR"
+    fi
+
+    # echo "DEBUG: CENV_DIR=\"${CENV_DIR}\"" >&2
+    # echo "DEBUG: CENV_USER_DIR=\"${CENV_USER_DIR}\"" >&2
+    # echo "DEBUG: CENV_USER_MNT=\"${CENV_USER_MNT}\"" >&2
+    # echo "DEBUG: FS_IMG=\"${FS_IMG}\"" >&2
+
+    if (grep -q ' avx2 ' /proc/cpuinfo) ; then
+        export OPENBLAS_CORETYPE="Haswell"
+    elif (grep -q ' avx ' /proc/cpuinfo) ; then
+        export OPENBLAS_CORETYPE="Sandybridge"
+    fi
+
+    export SWMOD_INST_BASE="${CENV_USER_MNT}/.local/sw"
+    export SWMOD_MODPATH="${SWMOD_INST_BASE}"
+
+    if [ "${CENV_RUNTIME}" = "apptainer" ]; then
+        if [ "${CENV_HOME_DIR}" != "${HOME}" ]; then
+            export APPTAINER_HOME="${CENV_HOME_MNT}"
+        fi
+        export APPTAINERENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
+        export APPTAINER_SHELL="${APPTAINER_SHELL:-${SHELL}}"
+        # Add user bin dir to path:
+        export APPTAINERENV_PREPEND_PATH="${CENV_USER_MNT}/.local/bin:${CENV_USER_MNT}/.julia/bin:${CENV_USER_MNT}/.cargo/bin"
+    else
+        export SINGULARITYENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
+        export SINGULARITY_SHELL="${SINGULARITY_SHELL:-${SHELL}}"
+        # Add user bin dir to path:
+        export SINGULARITYENV_PREPEND_PATH="${CENV_USER_MNT}/.local/bin:${CENV_USER_MNT}/.julia/bin:${CENV_USER_MNT}/.cargo/bin"
+    fi
+
+    export debian_chroot="${CENV_NAME}"
+
+    CENV_BIND_OPTS=()
+    if [ "${CENV_USER_MNT}" != "${CENV_USER_DIR}" ] ; then
+        CENV_BIND_OPTS=(
+            -B "${CENV_USER_DIR}:${CENV_USER_MNT}"
+            -B "${CENV_HOME_DIR}:${CENV_HOME_MNT}"
+            -B "${CENV_USER_DIR}/.vscode-server:${CENV_VSCS_MNT}"
+        )
+    fi
+}
+
+
+# Container instances of cenv environments are named
+# "${CENV_INSTANCE_PREFIX}CENV_NAME.SESSION_NAME". Session names must not
+# contain a ".", so the environment name and the session name can always be
+# recovered from the instance name:
+CENV_INSTANCE_PREFIX="cenv-"
+
+
+# Parses an instance specification "CENV_NAME/SESSION_NAME" (given as "$1",
+# "$2" is the cenv option it was passed to). Sets CENV_INSTANCE_SPEC,
+# CENV_INSTANCE_CENV_NAME and CENV_INSTANCE_NAME:
+parse_cenv_instance_spec() {
+    local spec="$1"
+    local option="$2"
+
+    if [ -z "${spec}" ] ; then
+        echo "ERROR: Missing instance specification, use \``basename $0` ${option} CENV_NAME/SESSION_NAME\`." >&2
+        exit 1
+    fi
+
+    if [ "${spec%/*}" = "${spec}" ] ; then
+        echo "ERROR: Invalid instance specification \"${spec}\", must be of the form \"CENV_NAME/SESSION_NAME\"." >&2
+        exit 1
+    fi
+
+    local cenv_name="${spec%/*}"
+    local session_name="${spec##*/}"
+
+    if ! [[ "${cenv_name}" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ ]] ; then
+        echo "ERROR: Invalid environment name \"${cenv_name}\" in instance specification \"${spec}\"." >&2
+        exit 1
+    fi
+
+    if ! [[ "${session_name}" =~ ^[A-Za-z0-9_][A-Za-z0-9_-]*$ ]] ; then
+        echo "ERROR: Invalid session name \"${session_name}\", may only contain letters, digits, \"_\" and \"-\"." >&2
+        exit 1
+    fi
+
+    CENV_INSTANCE_SPEC="${spec}"
+    CENV_INSTANCE_CENV_NAME="${cenv_name}"
+    CENV_INSTANCE_NAME="${CENV_INSTANCE_PREFIX}${cenv_name}.${session_name}"
+}
+
+
+# Aborts unless the selected container runtime engine supports instances:
+cenv_require_instance_runtime() {
+    if [ "${CENV_RUNTIME}" != "apptainer" ] && [ "${CENV_RUNTIME}" != "singularity" ] ; then
+        echo "ERROR: Container instances require Apptainer or Singularity, but the container runtime engine is \"${CENV_RUNTIME}\"." >&2
+        exit 1
+    fi
+}
+
+
+# Prints the names of all running cenv container instances:
+cenv_running_instances() {
+    "${CENV_RUNTIME}" instance list 2>/dev/null | awk 'NR > 1 { print $1 }'
+}
+
+
+# Returns zero if the container instance "$1" is running:
+cenv_instance_is_running() {
+    cenv_running_instances | grep -q -x -F "$1"
+}
+
+
+# Runs "${@:2}" while holding an exclusive lock on the file "$1" (using file
+# descriptor 9), if file locking is available:
+cenv_with_lock() {
+    local lockfile="$1"
+    shift 1
+
+    if ! command -v flock >/dev/null 2>&1 || ! (: >>"${lockfile}") 2>/dev/null ; then
+        "$@"
+        return
+    fi
+
+    ( flock -w 60 9 || true ; "$@" ) 9>>"${lockfile}"
+}
+
+
+# Starts the container instance ${CENV_INSTANCE_NAME} if it is not running yet:
+cenv_instance_start() {
+    if cenv_instance_is_running "${CENV_INSTANCE_NAME}" ; then
+        return 0
+    fi
+
+    echo "INFO: Starting container instance \"${CENV_INSTANCE_SPEC}\"" >&2
+    # The instance keeps running in the background and would inherit the lock
+    # file descriptor (see cenv_with_lock) and so hold the lock forever, so
+    # close that file descriptor for it:
+    "${CENV_RUNTIME}" instance start ${EXTRA_OPTS} "${CENV_BIND_OPTS[@]}" \
+        "${FS_IMG}" "${CENV_INSTANCE_NAME}" 9>&-
+}
+
+
+# Starts the container instance "CENV_NAME/SESSION_NAME" (given as "$1") if it
+# is not running yet, then runs a shell or the program given by the remaining
+# arguments in it:
+cenv_instance() {
+    parse_cenv_instance_spec "$1" "--instance"
+    shift 1
+
+    cenv_setup "${CENV_INSTANCE_CENV_NAME}"
+    cenv_require_instance_runtime
+    cenv_setup_apptainer
+
+    # Concurrent attempts to start the same instance make the container
+    # runtime clean up the instance that won the race, so serialize them:
+    local lockfile
+    if [ -d "${XDG_RUNTIME_DIR}" ] ; then
+        lockfile="${XDG_RUNTIME_DIR}/${CENV_INSTANCE_NAME}.lock"
+    else
+        lockfile="${CENV_USER_DIR}/.${CENV_INSTANCE_NAME}.lock"
+    fi
+
+    if ! cenv_with_lock "${lockfile}" cenv_instance_start ; then
+        # Without file locking, starting the instance may still have lost a
+        # race against a concurrent "--instance" for the same instance:
+        cenv_instance_is_running "${CENV_INSTANCE_NAME}" || exit 1
+    fi
+
+    # The home directory is fixed when the instance starts, APPTAINER_HOME
+    # would only cause a spurious warning when connecting to it:
+    unset APPTAINER_HOME
+
+    local CMD
+    if [ "$1" = "shell" ] ; then
+        CMD="shell"
+        shift 1
+    elif [ -z "$1" ]; then
+        CMD="shell"
+    else
+        CMD="exec"
+    fi
+
+    exec "${CENV_RUNTIME}" "${CMD}" "instance://${CENV_INSTANCE_NAME}" "$@"
+}
+
+
+# Stops the container instance "CENV_NAME/SESSION_NAME" (given as "$1"):
+cenv_instance_stop() {
+    parse_cenv_instance_spec "$1" "--stop"
+
+    set_cenv_runtime
+    cenv_require_instance_runtime
+
+    if ! cenv_instance_is_running "${CENV_INSTANCE_NAME}" ; then
+        echo "INFO: Container instance \"${CENV_INSTANCE_SPEC}\" is not running." >&2
+        return 0
+    fi
+
+    "${CENV_RUNTIME}" instance stop "${CENV_INSTANCE_NAME}"
+}
+
+
+# Lists the running container instances as "CENV_NAME/SESSION_NAME",
+# optionally only those of the environment given as "$1":
+cenv_instances_list() {
+    local cenv_filter="$1"
+
+    set_cenv_runtime
+    # Not an error, there simply can't be any instances without a container
+    # runtime engine that supports them:
+    if [ "${CENV_RUNTIME}" != "apptainer" ] && [ "${CENV_RUNTIME}" != "singularity" ] ; then
+        return 0
+    fi
+
+    # Environment names may contain a ".", session names may not, so the
+    # greedy match splits instance names at the right place:
+    local instance_re="^${CENV_INSTANCE_PREFIX}(.+)\.([^.]+)$"
+
+    local instance_name cenv_name session_name
+    while read -r instance_name ; do
+        # Skip container instances that weren't created by cenv:
+        [[ "${instance_name}" =~ ${instance_re} ]] || continue
+        cenv_name="${BASH_REMATCH[1]}"
+        session_name="${BASH_REMATCH[2]}"
+
+        if [ -z "${cenv_filter}" ] || [ "${cenv_filter}" = "${cenv_name}" ] ; then
+            echo "${cenv_name}/${session_name}"
+        fi
+    done < <(cenv_running_instances)
+}
+
+
 PROG="$0"
 CENV_NAME_ARG="$1"
 
@@ -381,32 +827,14 @@ elif [ "${CENV_NAME_ARG}" = "--list" ] ; then
     cenv_list "$@"
 elif [ "${CENV_NAME_ARG}" = "--create" ] ; then
     cenv_create "$@"
+elif [ "${CENV_NAME_ARG}" = "--instance" ] ; then
+    cenv_instance "$@"
+elif [ "${CENV_NAME_ARG}" = "--instances" ] ; then
+    cenv_instances_list "$@"
+elif [ "${CENV_NAME_ARG}" = "--stop" ] ; then
+    cenv_instance_stop "$@"
 else
-    CENV_DIR="${CENV_BASE_DIR}/${CENV_NAME_ARG}"
-
-    if [ -f "${CENV_DIR}/cenvrc" ] ; then
-        if [ -f "${CENV_DIR}/.cenvrc" ] ; then
-            echo "WARNING: Both \"${CENV_DIR}/cenvrc\" and \"${CENV_DIR}/.cenvrc\" exist, using \"${CENV_DIR}/cenvrc\"." >&2
-        fi
-        source "${CENV_DIR}/cenvrc"
-    elif [ -f "${CENV_DIR}/.cenvrc" ] ; then
-        # For backward compatibility:
-        echo "WARNING: Use of \"${CENV_DIR}/.cenvrc\" is deprecated, please rename it to \"${CENV_DIR}/cenvrc\"." >&2
-        source "${CENV_DIR}/.cenvrc"
-    fi
-
-    export CENV_USER_MNT="${CENV_USER_MNT:-${VENV_USER_MNT:-/user}}"
-    export CENV_HOME_DIR="${CENV_HOME_DIR:-${VENV_HOME_DIR:-${HOME}}}"
-    export CENV_HOME_MNT="${CENV_HOME_MNT:-${VENV_HOME_MNT:-/homedir}}"
-    export CENV_VSCS_MNT="${CENV_VSCS_MNT:-${VENV_HOME_MNT:-${HOME}/.vscode-server}}"
-
-    if [ "${CENV_HOME_DIR}" != "${HOME}" ]; then
-        mkdir -p "${CENV_HOME_DIR}"
-    fi
-
-    export CENV_NAME="${CENV_NAME_ARG}"
-    # Legacy support:
-    export VENV_NAME="${CENV_NAME_ARG}"
+    cenv_setup "${CENV_NAME_ARG}"
 
     if [ "${CMD}" = "shell" ]; then
         shift 1
@@ -416,178 +844,15 @@ else
         CMD="exec"
     fi
 
-    # Special exports for Python:
-    export PYTHONUSERBASE="${CENV_USER_MNT}/.local"
-    export PIP_CACHE_DIR="${CENV_USER_MNT}/.cache/pip"
-
-    # Special exports for Pixi/rattler:
-    export PIXI_CACHE_DIR="${CENV_USER_MNT}/.cache/rattler"
-    export RATTLER_CACHE_DIR="${CENV_USER_MNT}/.cache/rattler"
-
-    # Special exports for Python JIT/compilation caches:
-    export NUMBA_CACHE_DIR="${CENV_USER_MNT}/.cache/numba"
-    export CUPY_CACHE_DIR="${CENV_USER_MNT}/.cache/cupy"
-    export TRITON_CACHE_DIR="${CENV_USER_MNT}/.cache/triton"
-
-    # Special exports for matplotlib:
-    export MPLCONFIGDIR="${CENV_USER_MNT}/.config/matplotlib"
-
-    # Special exports for machine-learning model caches:
-    export HF_HOME="${CENV_USER_MNT}/.cache/huggingface"
-    export TORCH_HOME="${CENV_USER_MNT}/.cache/torch"
-
-    # Special exports for Jupyter:
-    export JUPYTER_CONFIG_DIR="${CENV_USER_MNT}/.jupyter"
-    export JUPYTER_DATA_DIR="${CENV_USER_MNT}/.local/share/jupyter"
-
-    # Special exports for IPython:
-    export IPYTHONDIR="${CENV_USER_MNT}/.ipython"
-
-    # Special exports for GitHub Atom:
-    export ATOM_HOME="${CENV_USER_MNT}/.atom"
-
-    # Special exports for Julia:
-    export JULIA_PKGDIR="${CENV_USER_MNT}/.julia"
-    export JULIA_DEPOT_PATH="${CENV_USER_MNT}/.julia:"
-    export JULIA_PKG_DEVDIR="${CENV_USER_MNT}/.julia/dev"
-
-    # Special exports for Node.js:
-    export NPM_CONFIG_CACHE="${CENV_USER_MNT}/.cache/npm"
-    export npm_config_devdir="${CENV_USER_MNT}/.cache/node-gyp"
-    export NODE_REPL_HISTORY="${CENV_USER_MNT}/.node_repl_history"
-
-    # Special exports for Rust:
-    export CARGO_HOME="${CENV_USER_MNT}/.cargo"
-    export RUSTUP_HOME="${CENV_USER_MNT}/.rustup"
-
-    set_cenv_runtime
     if [ "${CENV_RUNTIME}" = "apptainer" ] ||
        [ "${CENV_RUNTIME}" = "singularity" ]; then
 
-        if [ ! -d "${CENV_DIR}" ]; then
-            echo "ERROR: cenv directory \"${CENV_DIR}\" doesn't exist." >&2
-            exit 1
-        fi
+        cenv_setup_apptainer
 
-        FS_IMG=`find_cenv_rootfs "${CENV_DIR}"` || {
-            echo "ERROR: No rootfs found in \"${CENV_DIR}\", neither for architecture \"${CENV_ARCH}\" nor architecture-independent." >&2
-            exit 1
-        }
-
-        CENV_USER_DIR="${CENV_USER_DIR:-${CENV_DIR}/user}"
-        mkdir -p "${CENV_USER_DIR}"
-        mkdir -p "${CENV_USER_DIR}/.vscode-server"
-
-        if [ "${CENV_USER_MNT}" == "none" ] ; then
-            CENV_USER_MNT="${CENV_USER_DIR}"
-        fi
-
-        if [ "${CENV_RUNTIME}" = "apptainer" ]; then
-            EXTRA_OPTS="${CENV_APPTAINER_OPTS}"
-        else
-            EXTRA_OPTS="${CENV_SINGULARITY_OPTS}"
-        fi
-
-        # GPU support:
-        CENV_GPU="${CENV_GPU:-$CENV_GPUS}" # Backward compatibility
-        # GPU detection and support
-        if [ -z "$CENV_GPU" ] ; then
-            # auto-detect available GPU backends
-            _gpus=()
-            if command -v nvidia-smi >/dev/null 2>&1 ; then
-                _gpus+=("cuda")
-            fi
-            if command -v rocminfo >/dev/null 2>&1 ; then
-                _gpus+=("rocm")
-            fi
-            # only add opencl if neither cuda nor rocm was found
-            if [ ${#_gpus[@]} -eq 0 ] && [ -d "/etc/OpenCL/vendors" ] ; then
-                _gpus+=("opencl")
-            fi
-            if [ ${#_gpus[@]} -gt 0 ] ; then
-                export CENV_GPU="$(IFS=,; echo "${_gpus[*]}")"
-                # echo "DEBUG: Detected GPU support: ${CENV_GPU}" >&2
-            fi
-        fi
-
-        # enable selected GPU backends
-        if [ -n "$CENV_GPU" ] ; then
-            # split on commas, ignore empty tokens and trim whitespace
-            IFS=',' read -ra _gpu_backends <<< "$CENV_GPU"
-            unset IFS
-            for _g in "${_gpu_backends[@]}"; do
-            # trim leading/trailing whitespace
-            _g="${_g#"${_g%%[![:space:]]*}"}"
-            _g="${_g%"${_g##*[![:space:]]}"}"
-            [ -z "$_g" ] && continue
-            case "$_g" in
-                none)
-                ;;
-                cuda)
-                echo "INFO: Enabling ${CENV_RUNTIME} CUDA support" >&2
-                EXTRA_OPTS="${EXTRA_OPTS} --nv"
-                ;;
-                rocm)
-                echo "INFO: Enabling ${CENV_RUNTIME} ROCm support" >&2
-                EXTRA_OPTS="${EXTRA_OPTS} --rocm"
-                ;;
-                opencl)
-                echo "INFO: Mounting OpenCL vendors directory" >&2
-                EXTRA_OPTS="${EXTRA_OPTS} -B /etc/OpenCL/vendors"
-                ;;
-                *)
-                echo "WARNING: Unknown GPU backend '$_g', ignoring" >&2
-                ;;
-            esac
-            done
-        fi
-
-        if [[ "$XDG_RUNTIME_DIR" == /run/* ]] && [[ -d "$XDG_RUNTIME_DIR" ]]; then
-            EXTRA_OPTS="${EXTRA_OPTS} -B $XDG_RUNTIME_DIR"
-        fi
-
-        # echo "DEBUG: CENV_DIR=\"${CENV_DIR}\"" >&2
-        # echo "DEBUG: CENV_USER_DIR=\"${CENV_USER_DIR}\"" >&2
-        # echo "DEBUG: CENV_USER_MNT=\"${CENV_USER_MNT}\"" >&2
-        # echo "DEBUG: FS_IMG=\"${FS_IMG}\"" >&2
         # echo "DEBUG: CMD=\"${CMD} $@" >&2
 
-        if (grep -q ' avx2 ' /proc/cpuinfo) ; then
-            export OPENBLAS_CORETYPE="Haswell"
-        elif (grep -q ' avx ' /proc/cpuinfo) ; then
-            export OPENBLAS_CORETYPE="Sandybridge"
-        fi
-
-        export SWMOD_INST_BASE="${CENV_USER_MNT}/.local/sw"
-        export SWMOD_MODPATH="${SWMOD_INST_BASE}"
-
-        if [ "${CENV_RUNTIME}" = "apptainer" ]; then
-            if [ "${CENV_HOME_DIR}" != "${HOME}" ]; then
-                export APPTAINER_HOME="${CENV_HOME_MNT}"
-            fi
-            export APPTAINERENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
-            export APPTAINER_SHELL="${APPTAINER_SHELL:-${SHELL}}"
-            # Add user bin dir to path:
-            export APPTAINERENV_PREPEND_PATH="${CENV_USER_MNT}/.local/bin:${CENV_USER_MNT}/.julia/bin:${CENV_USER_MNT}/.cargo/bin"
-        else
-            export SINGULARITYENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
-            export SINGULARITY_SHELL="${SINGULARITY_SHELL:-${SHELL}}"
-            # Add user bin dir to path:
-            export SINGULARITYENV_PREPEND_PATH="${CENV_USER_MNT}/.local/bin:${CENV_USER_MNT}/.julia/bin:${CENV_USER_MNT}/.cargo/bin"
-        fi
-
-        export debian_chroot="${CENV_NAME}"
-
-        if [ "${CENV_USER_MNT}" != "${CENV_USER_DIR}" ] ; then
-            exec "${CENV_RUNTIME}" "${CMD}" ${EXTRA_OPTS} \
-                -B "${CENV_USER_DIR}:${CENV_USER_MNT}" \
-                -B "${CENV_HOME_DIR}:${CENV_HOME_MNT}" \
-                -B "${CENV_USER_DIR}/.vscode-server:${CENV_VSCS_MNT}" \
-                "${FS_IMG}" "$@"
-        else
-            exec "${CENV_RUNTIME}" "${CMD}" ${EXTRA_OPTS} \
-                "${FS_IMG}" "$@"
-        fi
+        exec "${CENV_RUNTIME}" "${CMD}" ${EXTRA_OPTS} "${CENV_BIND_OPTS[@]}" \
+            "${FS_IMG}" "$@"
     elif [ "${CENV_RUNTIME}" = "shifter" ] ; then
         EXTRA_OPTS="${CENV_SHIFTER_OPTS}"
 

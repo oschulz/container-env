@@ -50,6 +50,38 @@ cenv --list
 Run `cenv --help` for the full list of commands, environment variables and
 configuration files.
 
+## Container instances (persistent sessions)
+
+*Note: The following is currently limited to Apptainer and Singularity as
+runtimes.*
+
+Each `cenv myenv ...` run starts a separate container. A container instance
+keeps running in the background instead, and any number of shells and
+programs can connect to it. They share its mount, PID and IPC namespaces and
+so can see and talk to each other — an interactive shell, a VS Code tunnel
+server and an AI coding agent, for example. This is especially useful on
+remote and batch nodes.
+
+Instances are named `<cenv-name>/<session-name>`:
+
+```sh
+# Enter a shell in the instance "myenv/dev", starting it if it isn't running:
+cenv --instance myenv/dev
+
+# Run a program in it instead:
+cenv --instance myenv/dev python some_program [args...]
+
+# List running instances, optionally only those of "myenv":
+cenv --instances [myenv]
+
+# Stop the instance and everything running in it:
+cenv --stop myenv/dev
+```
+
+Container image, bind mounts and other container options are fixed when an
+instance starts — configuration changes only affect instances started
+afterwards.
+
 ## Using `cenv` with VS Code
 
 See [README-VSCode.md](README-VSCode.md) for how to use Visual Studio Code to
