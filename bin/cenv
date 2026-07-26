@@ -592,7 +592,7 @@ cenv_setup_apptainer() {
 
     if [ "${CENV_RUNTIME}" = "apptainer" ]; then
         if [ "${CENV_HOME_DIR}" != "${HOME}" ]; then
-            export APPTAINER_HOME="${CENV_HOME_MNT}"
+            export APPTAINER_HOME="${CENV_HOME_DIR}:${CENV_HOME_MNT}"
         fi
         export APPTAINERENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
         export APPTAINER_SHELL="${APPTAINER_SHELL:-${SHELL}}"
@@ -600,7 +600,7 @@ cenv_setup_apptainer() {
         export APPTAINERENV_PREPEND_PATH="${CENV_USER_MNT}/.local/bin:${CENV_USER_MNT}/.julia/bin:${CENV_USER_MNT}/.cargo/bin"
     else
         if [ "${CENV_HOME_DIR}" != "${HOME}" ]; then
-            export SINGULARITY_HOME="${CENV_HOME_MNT}"
+            export SINGULARITY_HOME="${CENV_HOME_DIR}:${CENV_HOME_MNT}"
         fi
         export SINGULARITYENV_PS1="[\u@\[\e[1m\]${CENV_NAME}\[\e[m\] cenv] \w > "
         export SINGULARITY_SHELL="${SINGULARITY_SHELL:-${SHELL}}"
