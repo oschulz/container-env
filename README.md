@@ -1,7 +1,7 @@
 # container-env (`cenv`)
 
 `cenv` manages and runs lightweight containerized environments via
-[Apptainer](https://apptainer.org) or
+[Apptainer](https://apptainer.org), [Singularity](https://sylabs.io) or
 [Shifter](https://docs.nersc.gov/development/shifter).
 
 Each cenv environment combines a container image with an environment-specific
@@ -89,15 +89,16 @@ develop within `cenv` environments.
 
 ## Containment (isolated environments)
 
-*Note: The following is currently limited to Apptainer as runtime.*
+*Note: The following is currently limited to Apptainer and Singularity as
+runtimes.*
 
 By default, `cenv` environments (run as container instances) mount and use the
 user's `$HOME` directly (and in addition mount it as `/homedir`). Other OS
 paths like `/tmp` are visible in container instances as well.
 
 If stricter isolation of an environment is desired, e.g. for environments that
-will run AI agents (e.g. for agentic coding), the Apptainer containment
-feature should be used.
+will run AI agents (e.g. for agentic coding), the containment feature of the
+runtime should be used.
 
 Create a `cenvrc` file in the cenv-environment directory
 (`${CENV_BASE_DIR}/${CENV_NAME}/cenvrc`) that contains something like:
@@ -113,3 +114,6 @@ export APPTAINER_CONTAIN="1"
 # Selectively bind in only the paths the workload actually needs:
 export CENV_APPTAINER_OPTS="--bind /path/to/project:/path/to/project"
 ```
+
+With Singularity as runtime, use `SINGULARITY_CONTAIN` and
+`CENV_SINGULARITY_OPTS` instead.
