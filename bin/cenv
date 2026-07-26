@@ -20,6 +20,43 @@ if [ "${CENV_BASE_DIR}" = "${legacy_default_basedir}" ]; then
     echo "WARNING: Defaulting to legacy CENV_BASE_DIR=\"\${HOME}/.venv\", please rename \"\${HOME}/.venv\" to \"\${HOME}/.cenv\". Support for \"\${HOME}/.venv\" will be removed in the future!" >&2
 fi
 
+# Architecture ("uname -m" naming) of the container images to use. Container
+# environment directories may be shared between machines of different
+# architectures, holding an image for each of them:
+export CENV_ARCH="${CENV_ARCH:-`uname -m`}"
+
+
+# Prints the path of the rootfs with the given name suffix ("-ARCH" or "") in
+# a container environment directory, returns non-zero if there is none:
+find_cenv_rootfs_variant() {
+    local cenv_dir="$1"
+    local suffix="$2"
+    local ext
+
+    if [ -d "${cenv_dir}/rootfs${suffix}" ]; then
+        echo "${cenv_dir}/rootfs${suffix}/"
+        return 0
+    fi
+
+    for ext in sif sqsh img ; do
+        if [ -f "${cenv_dir}/rootfs${suffix}.${ext}" ]; then
+            echo "${cenv_dir}/rootfs${suffix}.${ext}"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+
+# Finds the rootfs of a container environment directory. Architecture-specific
+# entries ("rootfs-${CENV_ARCH}[.EXT]") take precedence over the
+# architecture-independent ones ("rootfs[.EXT]"). Prints the rootfs path,
+# returns non-zero if no rootfs was found:
+find_cenv_rootfs() {
+    find_cenv_rootfs_variant "$1" "-${CENV_ARCH}" || find_cenv_rootfs_variant "$1" ""
+}
+
 
 set_cenv_runtime() {
     apptainer_cmd=`command -v apptainer || true`
@@ -172,6 +209,22 @@ itself. This can be useful in distributed scenarios, e.g. when generating
 batch job scripts that should not rely on cenv being on PATH.
 
 
+CONTAINER IMAGES
+----------------
+
+${PROG_NAME} looks for the container image of an environment in
+"\$CENV_BASE_DIR/\$CENV_NAME", as a directory "rootfs" or a file
+"rootfs.sif", "rootfs.sqsh" or "rootfs.img" (may be symlinks). These are
+typically created by \`${PROG_NAME} --create\`.
+
+Architecture-specific variants "rootfs-\$CENV_ARCH[.EXT]" (e.g.
+"rootfs-x86_64.sif", "rootfs-aarch64.sif") take precedence over the
+architecture-independent ones, so a single environment directory can be
+shared between machines of different architectures. \`${PROG_NAME} --create\`
+creates architecture-specific entries; run it once per architecture to add
+an image for each of them.
+
+
 CONFIGURATION FILES
 -------------------
 
@@ -200,7 +253,7 @@ invalid_argument_error() {
 
 
 cenv_list() {
-    for dir in `echo ${CENV_BASE_DIR}/*/rootfs.* | xargs dirname | grep -v '\*'`; do
+    for dir in `echo ${CENV_BASE_DIR}/*/rootfs* | xargs -n 1 dirname | grep -v '\*' | sort -u`; do
         if [ "$1" == "-v" ] ; then
             echo "`basename ${dir}`: ${dir}"
         else
@@ -223,9 +276,18 @@ cenv_create() {
     fi
 
     local CENV_DIR="${CENV_BASE_DIR}/${CENV_NAME}"
+    local ADD_ARCH="no"
     if [ -e "${CENV_DIR}" ] ; then
-        echo "ERROR: Virtual enviromenment \"${CENV_NAME}\" (\"${CENV_DIR}\") already exists." >&2
-        exit 1
+        # Adding an image for a further architecture to an existing container
+        # environment is allowed, anything else is not:
+        if [ -n "$(find_cenv_rootfs_variant "${CENV_DIR}" "-${CENV_ARCH}")" ] ; then
+            echo "ERROR: Virtual enviromenment \"${CENV_NAME}\" (\"${CENV_DIR}\") already has a rootfs for architecture \"${CENV_ARCH}\"." >&2
+            exit 1
+        elif [ -z "$(ls -d "${CENV_DIR}"/rootfs* 2>/dev/null)" ] ; then
+            echo "ERROR: Virtual enviromenment \"${CENV_NAME}\" (\"${CENV_DIR}\") already exists." >&2
+            exit 1
+        fi
+        ADD_ARCH="yes"
     fi
 
     set_cenv_runtime
@@ -257,13 +319,17 @@ cenv_create() {
         CENV_IMG_ABS=`absname "${CENV_IMG}"`
 
         if [ -z "${CENV_IMG_EXT}" ]; then
-            local IMG_LINK_NAME="rootfs"
+            local IMG_LINK_NAME="rootfs-${CENV_ARCH}"
         else
-            local IMG_LINK_NAME="rootfs.${CENV_IMG_EXT}"
+            local IMG_LINK_NAME="rootfs-${CENV_ARCH}.${CENV_IMG_EXT}"
         fi
 
         local IMG_LINK_PATH="${CENV_DIR}/${IMG_LINK_NAME}"
-        echo "INFO: Creating virtual environment \"${CENV_NAME}\" in \"${CENV_DIR}\"" >&2
+        if [ "${ADD_ARCH}" = "yes" ] ; then
+            echo "INFO: Adding rootfs for architecture \"${CENV_ARCH}\" to virtual environment \"${CENV_NAME}\" in \"${CENV_DIR}\"" >&2
+        else
+            echo "INFO: Creating virtual environment \"${CENV_NAME}\" in \"${CENV_DIR}\"" >&2
+        fi
         mkdir -p "${CENV_DIR}"
         ln -s "${CENV_IMG_ABS}" "${IMG_LINK_PATH}"
         if (command -v symlinks >/dev/null) ; then
@@ -280,7 +346,11 @@ cenv_create() {
         echo "ERROR: cenv internal error." >&2; exit 1
     fi
 
-    echo "Created virtual environment \"${CENV_NAME}\", run \`cenv ${CENV_NAME}\` to try it out." >&2
+    if [ "${ADD_ARCH}" = "yes" ] ; then
+        echo "Added rootfs for architecture \"${CENV_ARCH}\" to virtual environment \"${CENV_NAME}\"." >&2
+    else
+        echo "Created virtual environment \"${CENV_NAME}\", run \`cenv ${CENV_NAME}\` to try it out." >&2
+    fi
 }
 
 
@@ -399,18 +469,10 @@ else
             exit 1
         fi
 
-        if [ -d "${CENV_DIR}/rootfs" ]; then
-            FS_IMG="${CENV_DIR}/rootfs/"
-        elif [ -f "${CENV_DIR}/rootfs.sif" ]; then
-            FS_IMG="${CENV_DIR}/rootfs.sif"
-        elif [ -f "${CENV_DIR}/rootfs.sqsh" ]; then
-            FS_IMG="${CENV_DIR}/rootfs.sqsh"
-        elif [ -f "${CENV_DIR}/rootfs.img" ]; then
-            FS_IMG="${CENV_DIR}/rootfs.img"
-        else
-            echo "ERROR: No rootfs found in \"${CENV_DIR}\"." >&2
+        FS_IMG=`find_cenv_rootfs "${CENV_DIR}"` || {
+            echo "ERROR: No rootfs found in \"${CENV_DIR}\", neither for architecture \"${CENV_ARCH}\" nor architecture-independent." >&2
             exit 1
-        fi
+        }
 
         CENV_USER_DIR="${CENV_USER_DIR:-${CENV_DIR}/user}"
         mkdir -p "${CENV_USER_DIR}"
@@ -532,7 +594,14 @@ else
         export XDG_RUNTIME_DIR="${TMPDIR:-/tmp}/`whoami`/run"
         mkdir -p "${XDG_RUNTIME_DIR}"
 
-        img_ref_file="${CENV_DIR}/rootfs.shifter"
+        # Docker image references resolve per-architecture via multi-arch
+        # manifests, so an architecture-specific reference is supported but
+        # normally not needed:
+        if [ -f "${CENV_DIR}/rootfs-${CENV_ARCH}.shifter" ] ; then
+            img_ref_file="${CENV_DIR}/rootfs-${CENV_ARCH}.shifter"
+        else
+            img_ref_file="${CENV_DIR}/rootfs.shifter"
+        fi
         if [ ! -f "${img_ref_file}" ] ; then
             echo "ERROR: Missing image reference \"${img_ref_file}\"" >&2; exit 1
         fi
