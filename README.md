@@ -117,3 +117,7 @@ export CENV_APPTAINER_OPTS="--bind /path/to/project:/path/to/project"
 
 With Singularity as runtime, use `SINGULARITY_CONTAIN` and
 `CENV_SINGULARITY_OPTS` instead.
+
+## License
+
+[MIT](LICENSE)
